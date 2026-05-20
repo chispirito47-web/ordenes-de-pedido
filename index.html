@@ -809,9 +809,9 @@
   <div class="card">
     <div class="card-title">Cláusulas de Pago</div>
     <div class="clausulas">
-      <p><strong>1.</strong> El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 60% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.</p>
-      <p><strong>2.</strong> CASA DAMS se compromete que durante el tiempo estipulado en la factura estará el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.</p>
-      <p><strong>3.</strong> En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 9% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.</p>
+      <p><strong>1.</strong> El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.</p>
+      <p><strong>2.</strong> CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.</p>
+      <p><strong>3.</strong> En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo, en cualquier tipo de venta ya sea contado o plan separe.</p>
     </div>
   </div>
 
@@ -1368,9 +1368,9 @@ async function generarPDFBlob() {
   // ---- CLÁUSULAS ----
   doc.setFillColor(245, 240, 232);
   const clausulaText = [
-    '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 60% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
-    '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura estará el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
-    '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 9% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
+    '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
+    '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
+    '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo, en cualquier tipo de venta ya sea contado o plan separe.'
   ];
 
   // Calcular altura real de cláusulas
