@@ -612,7 +612,6 @@
     .header-brand .logo { font-size: 20px; }
     .orden-numero { font-size: 22px; }
   }
-
   /* ===== PESTAÑAS ===== */
   .tabs { display: flex; background: var(--dark); padding: 0 24px; gap: 4px; border-top: 1px solid rgba(255,255,255,0.08); }
   .tab-btn { padding: 12px 24px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; border: none; background: transparent; color: var(--warm-gray); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
@@ -679,6 +678,7 @@
     <div class="orden-numero" id="displayNumero">—</div>
   </div>
 </div>
+
 
 <!-- PESTAÑAS -->
 <div class="tabs">
@@ -849,10 +849,7 @@
     <button class="btn-refresh" onclick="cargarHistorial()" title="Actualizar">↻</button>
   </div>
   <div id="historialLista">
-    <div class="historial-empty">
-      <div class="empty-icon">🗂</div>
-      <p>Abre el historial para ver las órdenes guardadas</p>
-    </div>
+    <div class="historial-empty"><div class="empty-icon">🗂</div><p>Abre el historial para ver las órdenes guardadas</p></div>
   </div>
 </div>
 </div><!-- /tab-historial -->
@@ -1334,8 +1331,10 @@ async function generarPDFBlob() {
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   doc.setTextColor(28, 26, 23);
-  const sonText = datos.son.length > 60 ? datos.son.substring(0, 57) + '...' : datos.son;
-  doc.text(sonText, margin + 14, y + 4);
+  const sonLines = doc.splitTextToSize(datos.son, contentW * 0.6 - 16);
+  doc.setFontSize(7);
+  doc.text(sonLines[0] || '', margin + 14, y + 3.5);
+  if (sonLines[1]) doc.text(sonLines[1], margin + 14, y + 7.5);
 
   // Abono / Saldo / Total
   const totX = margin + contentW * 0.62;
@@ -1374,26 +1373,37 @@ async function generarPDFBlob() {
     '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 9% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
   ];
 
-  doc.setFontSize(6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(107, 79, 53);
+  // Calcular altura real de cláusulas
+  doc.setFontSize(5.8);
+  let totalClausulaLines = 0;
+  clausulaText.forEach(c => {
+    const lines = doc.splitTextToSize(c, contentW - 6);
+    totalClausulaLines += lines.length + 0.5;
+  });
+  const clausulaH = 8 + totalClausulaLines * 3.2;
+
   doc.setFillColor(245, 240, 232);
-  doc.rect(margin, y, contentW, 22, 'F');
+  doc.rect(margin, y, contentW, clausulaH, 'F');
+  doc.setDrawColor(212, 201, 184);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, y, contentW, clausulaH);
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
+  doc.setTextColor(107, 79, 53);
   doc.text('CLÁUSULAS DE PAGO', margin + contentW / 2, y + 4, { align: 'center' });
 
-  let ty = y + 7;
+  let ty = y + 8;
   clausulaText.forEach(c => {
-    const lines = doc.splitTextToSize(c, contentW - 4);
+    const lines = doc.splitTextToSize(c, contentW - 6);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(5.8);
     doc.setTextColor(80, 70, 60);
-    doc.text(lines, margin + 2, ty);
-    ty += lines.length * 3.2;
+    doc.text(lines, margin + 3, ty);
+    ty += lines.length * 3.2 + 1;
   });
 
-  y += 26;
+  y += clausulaH + 4;
 
   // ---- FIRMAS ----
   const firmaW = contentW / 2 - 5;
@@ -1470,69 +1480,9 @@ async function previsualizarPDF() {
 }
 
 // ========================
-// SUPABASE
-// ========================
-const SUPABASE_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
-
-async function guardarEnSupabase(pdfLink, enviado) {
-  try {
-    const datos = getDatos();
-    const productos = getProductos();
-
-    // Parsear valores numéricos limpios
-    const limpiarNum = v => parseFloat((v || '0').toString().replace(/[^0-9.-]/g, '')) || 0;
-
-    const payload = {
-      numero_orden:      datos.numero,
-      op:                datos.numero,
-      cliente:           datos.nombre || '',
-      telefono:          datos.tel || '',
-      cedula:            datos.cc || '',
-      direccion:         datos.dir || '',
-      ciudad:            datos.ciudad || '',
-      correo:            datos.correo || '',
-      vendedor:          datos.vendedor || '',
-      metodo_pago:       datos.formaPago || '',
-      fecha_orden:       datos.fecha || new Date().toISOString().split('T')[0],
-      fecha_vencimiento: datos.vencimiento || null,
-      productos:         productos,
-      subtotal:          limpiarNum(datos.subtotal),
-      valor_total:       limpiarNum(datos.total),
-      abono:             limpiarNum(datos.abono),
-      saldo_pendiente:   limpiarNum(datos.saldo),
-      pdf_url:           pdfLink || '',
-      enviado_whatsapp:  enviado,
-      notas:             datos.son || ''
-    };
-
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'apikey':        SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Prefer':        'return=minimal'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('Supabase error:', err);
-      return false;
-    }
-    return true;
-  } catch(e) {
-    console.error('Error guardando en Supabase:', e);
-    return false;
-  }
-}
-
-// ========================
 // WHATSAPP — WAHA
 // ========================
-const WAHA_URL  = 'http://localhost:3001';
+const WAHA_URL  = 'https://conjuror-deviator-unleveled.ngrok-free.dev';
 const WAHA_KEY  = '7a498bf58d914dfba845841aca339131';
 const WAHA_SESSION = 'default';
 
@@ -1568,23 +1518,30 @@ async function enviarWhatsApp() {
     // 1. Generar PDF como blob
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
+    const pdfFile = new File([pdfBlob], `OrdenPedido_CasaDams_${datos.numero}.pdf`, { type: 'application/pdf' });
+
     // 2. Subir a Supabase Storage
     mostrarToast('⏳ Subiendo PDF...');
     const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
     const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
     const fileName = `OrdenPedido_CasaDams_${datos.numero}_${Date.now()}.pdf`;
+
     const uploadRes = await fetch(`${SUPA_URL}/storage/v1/object/ordenes/${fileName}`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + SUPA_KEY, 'apikey': SUPA_KEY, 'Content-Type': 'application/pdf' },
+      headers: {
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'apikey': SUPA_KEY,
+        'Content-Type': 'application/pdf'
+      },
       body: pdfBlob
     });
-    const pdfLink = uploadRes.ok ? `${SUPA_URL}/storage/v1/object/public/ordenes/${fileName}` : '';
+    const pdfLink = uploadRes.ok
+      ? `${SUPA_URL}/storage/v1/object/public/ordenes/${fileName}`
+      : '';
 
-    // 3. Enviar por WAHA — mensaje completo y bonito
+    // 3. Enviar mensaje por WAHA
     mostrarToast('⏳ Enviando por WhatsApp...');
-    const productos = getProductos();
-    const listaProductos = productos.filter(p => p.desc).map(p => `▪️ ${p.qty}x ${p.desc} — ${p.sub}`).join('\n');
-    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${datos.nombre || 'cliente'}*, aquí está su orden de pedido N° *${datos.numero}*:\n\n${listaProductos}\n\n💰 *Total:* ${datos.total}\n💵 *Abono:* ${datos.abono || '$0'}\n📋 *Saldo:* ${datos.saldo}\n\n📄 *PDF de su orden:*\n${pdfLink || '(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola ${datos.nombre || 'cliente'}, aquí está su orden de pedido N° ${datos.numero}:\n\n${pdfLink ? `📄 ${pdfLink}` : '(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
 
     const res = await fetch('/api/waha', {
       method: 'POST',
@@ -1598,20 +1555,44 @@ async function enviarWhatsApp() {
     if (res.ok) {
       // Guardar en Supabase
       mostrarToast('⏳ Guardando orden...');
-      const guardado = await guardarEnSupabase(pdfLink, true);
-      mostrarToast(guardado
-        ? (pdfLink ? '✅ Orden enviada y guardada' : '✅ Orden enviada y guardada')
-        : '✅ Enviada — no se pudo guardar en nube');
+      const SUPA_URL2 = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+      const SUPA_KEY2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
+      const productos2 = getProductos();
+      const limpiarNum = v => parseFloat((v||'0').toString().replace(/[^0-9.-]/g,''))||0;
+      await fetch(`${SUPA_URL2}/rest/v1/pedidos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPA_KEY2,
+          'Authorization': 'Bearer ' + SUPA_KEY2,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          numero_orden: datos.numero, op: datos.numero,
+          cliente: datos.nombre||'', telefono: datos.tel||'',
+          cedula: datos.cc||'', direccion: datos.dir||'',
+          ciudad: datos.ciudad||'', correo: datos.correo||'',
+          vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
+          fecha_orden: datos.fecha||new Date().toISOString().split('T')[0],
+          fecha_vencimiento: datos.vencimiento||null,
+          productos: productos2,
+          subtotal: limpiarNum(datos.subtotal),
+          valor_total: limpiarNum(datos.total),
+          abono: limpiarNum(datos.abono),
+          saldo_pendiente: limpiarNum(datos.saldo),
+          pdf_url: pdfLink||'', enviado_whatsapp: true,
+          notas: datos.son||''
+        })
+      });
+      mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
     } else {
       throw new Error('WAHA error: ' + res.status);
     }
 
   } catch (e) {
     console.error(e);
-    // Intentar guardar en Supabase aunque WAHA falle
+    mostrarToast('⚠️ Error — abriendo WhatsApp...');
     const datos = getDatos();
-    await guardarEnSupabase('', false);
-    mostrarToast('⚠️ Error WhatsApp — orden guardada en nube');
     const msg = `🛋️ *CASA DAMS - Orden N° ${datos.numero}*\n\n👤 ${datos.nombre || '—'}\n💰 Total: ${datos.total}\n\n✅ Gracias por su compra.`;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
   }
