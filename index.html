@@ -1396,7 +1396,7 @@ async function previsualizarPDF() {
 // ========================
 // WHATSAPP — WAHA
 // ========================
-const WAHA_URL  = 'http://localhost:3001';
+const WAHA_URL  = 'https://conjuror-deviator-unleveled.ngrok-free.dev'; // via proxy
 const WAHA_KEY  = '7a498bf58d914dfba845841aca339131';
 const WAHA_SESSION = 'default';
 
@@ -1457,17 +1457,12 @@ async function enviarWhatsApp() {
     mostrarToast('⏳ Enviando por WhatsApp...');
     const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola ${datos.nombre || 'cliente'}, aquí está su orden de pedido N° ${datos.numero}:\n\n${pdfLink ? `📄 ${pdfLink}` : '(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
 
-    const res = await fetch(`${WAHA_URL}/api/sendText`, {
+    const res = await fetch('/api/waha', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': WAHA_KEY,
-        'ngrok-skip-browser-warning': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        session: WAHA_SESSION,
-        chatId: chatId,
-        text: mensaje
+        endpoint: '/api/sendText',
+        payload: { session: WAHA_SESSION, chatId: chatId, text: mensaje }
       })
     });
 

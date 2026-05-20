@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/waha.js": {
+      "maxDuration": 30
+    }
+  }
+}
