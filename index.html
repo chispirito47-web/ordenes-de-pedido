@@ -612,6 +612,58 @@
     .header-brand .logo { font-size: 20px; }
     .orden-numero { font-size: 22px; }
   }
+
+  /* ===== PESTAÑAS ===== */
+  .tabs { display: flex; background: var(--dark); padding: 0 24px; gap: 4px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .tab-btn { padding: 12px 24px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; border: none; background: transparent; color: var(--warm-gray); cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ===== HISTORIAL ===== */
+  .historial-search { background: var(--white); border-radius: 14px; padding: 16px 20px; margin-bottom: 16px; border: 1px solid var(--border); display: flex; gap: 12px; align-items: center; }
+  .historial-search input { flex: 1; background: var(--cream); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--dark); }
+  .historial-search input:focus { outline: none; border-color: var(--gold); }
+  .btn-buscar { background: var(--gold); color: var(--dark); border: none; border-radius: 10px; padding: 12px 20px; font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; }
+  .btn-refresh { background: transparent; border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; font-size: 18px; cursor: pointer; color: var(--warm-gray); transition: all 0.2s; }
+  .btn-refresh:hover { border-color: var(--gold); color: var(--gold); }
+  .orden-card { background: var(--white); border-radius: 14px; border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer; transition: all 0.2s; }
+  .orden-card:hover { border-color: var(--gold); box-shadow: 0 4px 16px rgba(196,154,60,0.12); }
+  .orden-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: var(--cream); border-bottom: 1px solid var(--border); }
+  .orden-card-num { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: var(--gold); }
+  .orden-card-fecha { font-size: 12px; color: var(--warm-gray); }
+  .orden-card-badge { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+  .badge-enviado { background: #D1FAE5; color: #065F46; }
+  .badge-noenv { background: #FEE2E2; color: #991B1B; }
+  .orden-card-body { padding: 14px 18px; }
+  .orden-card-cliente { font-size: 16px; font-weight: 600; color: var(--dark); margin-bottom: 6px; }
+  .orden-card-info { display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; color: var(--warm-gray); }
+  .orden-card-totales { display: flex; gap: 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .tot-item { display: flex; flex-direction: column; gap: 2px; }
+  .tot-item .tot-label { font-size: 10px; color: var(--warm-gray); letter-spacing: 1px; text-transform: uppercase; }
+  .tot-item .tot-val { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: var(--dark); }
+  .tot-item .tot-val.saldo { color: var(--red); }
+  .tot-item .tot-val.pagado { color: var(--green); }
+  .detalle-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 300; align-items: flex-end; justify-content: center; }
+  .detalle-overlay.show { display: flex; }
+  .detalle-modal { background: var(--white); border-radius: 24px 24px 0 0; width: 100%; max-width: 900px; max-height: 85vh; overflow-y: auto; padding: 24px; }
+  .detalle-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .detalle-titulo { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); font-weight: 700; }
+  .btn-cerrar-detalle { background: var(--cream); border: 1px solid var(--border); border-radius: 10px; padding: 8px 16px; font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; color: var(--dark); }
+  .detalle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .detalle-field { display: flex; flex-direction: column; gap: 4px; }
+  .detalle-field .det-label { font-size: 10px; font-weight: 600; color: var(--warm-gray); letter-spacing: 1px; text-transform: uppercase; }
+  .detalle-field .det-val { font-size: 15px; color: var(--dark); font-weight: 500; }
+  .detalle-productos { background: var(--cream); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .det-prod-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--dark); }
+  .det-prod-row:last-child { border-bottom: none; }
+  .det-prod-desc { flex: 1; }
+  .det-prod-val { font-weight: 600; color: var(--brown); }
+  .historial-empty { text-align: center; padding: 60px 20px; color: var(--warm-gray); }
+  .historial-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .historial-empty p { font-size: 15px; }
+  .historial-loading { text-align: center; padding: 40px; color: var(--warm-gray); font-size: 15px; }
+
 </style>
 </head>
 <body>
@@ -628,6 +680,14 @@
   </div>
 </div>
 
+<!-- PESTAÑAS -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="cambiarTab('orden')">📋 Nueva Orden</button>
+  <button class="tab-btn" onclick="cambiarTab('historial')">🗂 Historial</button>
+</div>
+
+<!-- TAB: ORDEN -->
+<div class="tab-content active" id="tab-orden">
 <div class="container">
 
   <!-- INFO GENERAL -->
@@ -777,6 +837,35 @@
     </div>
   </div>
 
+</div>
+
+</div><!-- /tab-orden -->
+
+<!-- TAB: HISTORIAL -->
+<div class="tab-content" id="tab-historial">
+<div class="container">
+  <div class="historial-search">
+    <input type="text" id="historialBuscar" placeholder="Buscar por cliente, N° orden, teléfono..." oninput="filtrarOrdenes()">
+    <button class="btn-refresh" onclick="cargarHistorial()" title="Actualizar">↻</button>
+  </div>
+  <div id="historialLista">
+    <div class="historial-empty">
+      <div class="empty-icon">🗂</div>
+      <p>Abre el historial para ver las órdenes guardadas</p>
+    </div>
+  </div>
+</div>
+</div><!-- /tab-historial -->
+
+<!-- MODAL DETALLE ORDEN -->
+<div class="detalle-overlay" id="detalleOverlay">
+  <div class="detalle-modal">
+    <div class="detalle-header">
+      <div class="detalle-titulo" id="detalleTitulo">Orden #</div>
+      <button class="btn-cerrar-detalle" onclick="cerrarDetalle()">✕ Cerrar</button>
+    </div>
+    <div id="detalleContenido"></div>
+  </div>
 </div>
 
 <!-- FOOTER -->
@@ -1245,10 +1334,8 @@ async function generarPDFBlob() {
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   doc.setTextColor(28, 26, 23);
-  const sonLines = doc.splitTextToSize(datos.son, contentW * 0.6 - 16);
-  doc.setFontSize(7);
-  doc.text(sonLines[0] || '', margin + 14, y + 3.5);
-  if (sonLines[1]) doc.text(sonLines[1], margin + 14, y + 7.5);
+  const sonText = datos.son.length > 60 ? datos.son.substring(0, 57) + '...' : datos.son;
+  doc.text(sonText, margin + 14, y + 4);
 
   // Abono / Saldo / Total
   const totX = margin + contentW * 0.62;
@@ -1287,37 +1374,26 @@ async function generarPDFBlob() {
     '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 9% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
   ];
 
-  // Calcular altura real de cláusulas
-  doc.setFontSize(5.8);
-  let totalClausulaLines = 0;
-  clausulaText.forEach(c => {
-    const lines = doc.splitTextToSize(c, contentW - 6);
-    totalClausulaLines += lines.length + 0.5;
-  });
-  const clausulaH = 8 + totalClausulaLines * 3.2;
-
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(107, 79, 53);
   doc.setFillColor(245, 240, 232);
-  doc.rect(margin, y, contentW, clausulaH, 'F');
-  doc.setDrawColor(212, 201, 184);
-  doc.setLineWidth(0.3);
-  doc.rect(margin, y, contentW, clausulaH);
-
+  doc.rect(margin, y, contentW, 22, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
-  doc.setTextColor(107, 79, 53);
   doc.text('CLÁUSULAS DE PAGO', margin + contentW / 2, y + 4, { align: 'center' });
 
-  let ty = y + 8;
+  let ty = y + 7;
   clausulaText.forEach(c => {
-    const lines = doc.splitTextToSize(c, contentW - 6);
+    const lines = doc.splitTextToSize(c, contentW - 4);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(5.8);
     doc.setTextColor(80, 70, 60);
-    doc.text(lines, margin + 3, ty);
-    ty += lines.length * 3.2 + 1;
+    doc.text(lines, margin + 2, ty);
+    ty += lines.length * 3.2;
   });
 
-  y += clausulaH + 4;
+  y += 26;
 
   // ---- FIRMAS ----
   const firmaW = contentW / 2 - 5;
@@ -1394,9 +1470,69 @@ async function previsualizarPDF() {
 }
 
 // ========================
+// SUPABASE
+// ========================
+const SUPABASE_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
+
+async function guardarEnSupabase(pdfLink, enviado) {
+  try {
+    const datos = getDatos();
+    const productos = getProductos();
+
+    // Parsear valores numéricos limpios
+    const limpiarNum = v => parseFloat((v || '0').toString().replace(/[^0-9.-]/g, '')) || 0;
+
+    const payload = {
+      numero_orden:      datos.numero,
+      op:                datos.numero,
+      cliente:           datos.nombre || '',
+      telefono:          datos.tel || '',
+      cedula:            datos.cc || '',
+      direccion:         datos.dir || '',
+      ciudad:            datos.ciudad || '',
+      correo:            datos.correo || '',
+      vendedor:          datos.vendedor || '',
+      metodo_pago:       datos.formaPago || '',
+      fecha_orden:       datos.fecha || new Date().toISOString().split('T')[0],
+      fecha_vencimiento: datos.vencimiento || null,
+      productos:         productos,
+      subtotal:          limpiarNum(datos.subtotal),
+      valor_total:       limpiarNum(datos.total),
+      abono:             limpiarNum(datos.abono),
+      saldo_pendiente:   limpiarNum(datos.saldo),
+      pdf_url:           pdfLink || '',
+      enviado_whatsapp:  enviado,
+      notas:             datos.son || ''
+    };
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer':        'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('Supabase error:', err);
+      return false;
+    }
+    return true;
+  } catch(e) {
+    console.error('Error guardando en Supabase:', e);
+    return false;
+  }
+}
+
+// ========================
 // WHATSAPP — WAHA
 // ========================
-const WAHA_URL  = 'https://conjuror-deviator-unleveled.ngrok-free.dev'; // via proxy
+const WAHA_URL  = 'http://localhost:3001';
 const WAHA_KEY  = '7a498bf58d914dfba845841aca339131';
 const WAHA_SESSION = 'default';
 
@@ -1432,30 +1568,23 @@ async function enviarWhatsApp() {
     // 1. Generar PDF como blob
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
-    const pdfFile = new File([pdfBlob], `OrdenPedido_CasaDams_${datos.numero}.pdf`, { type: 'application/pdf' });
-
     // 2. Subir a Supabase Storage
     mostrarToast('⏳ Subiendo PDF...');
     const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
     const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
     const fileName = `OrdenPedido_CasaDams_${datos.numero}_${Date.now()}.pdf`;
-
     const uploadRes = await fetch(`${SUPA_URL}/storage/v1/object/ordenes/${fileName}`, {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + SUPA_KEY,
-        'apikey': SUPA_KEY,
-        'Content-Type': 'application/pdf'
-      },
+      headers: { 'Authorization': 'Bearer ' + SUPA_KEY, 'apikey': SUPA_KEY, 'Content-Type': 'application/pdf' },
       body: pdfBlob
     });
-    const pdfLink = uploadRes.ok
-      ? `${SUPA_URL}/storage/v1/object/public/ordenes/${fileName}`
-      : '';
+    const pdfLink = uploadRes.ok ? `${SUPA_URL}/storage/v1/object/public/ordenes/${fileName}` : '';
 
-    // 3. Enviar mensaje por WAHA
+    // 3. Enviar por WAHA — mensaje completo y bonito
     mostrarToast('⏳ Enviando por WhatsApp...');
-    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola ${datos.nombre || 'cliente'}, aquí está su orden de pedido N° ${datos.numero}:\n\n${pdfLink ? `📄 ${pdfLink}` : '(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+    const productos = getProductos();
+    const listaProductos = productos.filter(p => p.desc).map(p => `▪️ ${p.qty}x ${p.desc} — ${p.sub}`).join('\n');
+    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${datos.nombre || 'cliente'}*, aquí está su orden de pedido N° *${datos.numero}*:\n\n${listaProductos}\n\n💰 *Total:* ${datos.total}\n💵 *Abono:* ${datos.abono || '$0'}\n📋 *Saldo:* ${datos.saldo}\n\n📄 *PDF de su orden:*\n${pdfLink || '(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
 
     const res = await fetch('/api/waha', {
       method: 'POST',
@@ -1469,44 +1598,20 @@ async function enviarWhatsApp() {
     if (res.ok) {
       // Guardar en Supabase
       mostrarToast('⏳ Guardando orden...');
-      const SUPA_URL2 = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
-      const SUPA_KEY2 = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
-      const productos2 = getProductos();
-      const limpiarNum = v => parseFloat((v||'0').toString().replace(/[^0-9.-]/g,''))||0;
-      await fetch(`${SUPA_URL2}/rest/v1/pedidos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPA_KEY2,
-          'Authorization': 'Bearer ' + SUPA_KEY2,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          numero_orden: datos.numero, op: datos.numero,
-          cliente: datos.nombre||'', telefono: datos.tel||'',
-          cedula: datos.cc||'', direccion: datos.dir||'',
-          ciudad: datos.ciudad||'', correo: datos.correo||'',
-          vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
-          fecha_orden: datos.fecha||new Date().toISOString().split('T')[0],
-          fecha_vencimiento: datos.vencimiento||null,
-          productos: productos2,
-          subtotal: limpiarNum(datos.subtotal),
-          valor_total: limpiarNum(datos.total),
-          abono: limpiarNum(datos.abono),
-          saldo_pendiente: limpiarNum(datos.saldo),
-          pdf_url: pdfLink||'', enviado_whatsapp: true,
-          notas: datos.son||''
-        })
-      });
-      mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
+      const guardado = await guardarEnSupabase(pdfLink, true);
+      mostrarToast(guardado
+        ? (pdfLink ? '✅ Orden enviada y guardada' : '✅ Orden enviada y guardada')
+        : '✅ Enviada — no se pudo guardar en nube');
     } else {
       throw new Error('WAHA error: ' + res.status);
     }
 
   } catch (e) {
     console.error(e);
-    mostrarToast('⚠️ Error — abriendo WhatsApp...');
+    // Intentar guardar en Supabase aunque WAHA falle
     const datos = getDatos();
+    await guardarEnSupabase('', false);
+    mostrarToast('⚠️ Error WhatsApp — orden guardada en nube');
     const msg = `🛋️ *CASA DAMS - Orden N° ${datos.numero}*\n\n👤 ${datos.nombre || '—'}\n💰 Total: ${datos.total}\n\n✅ Gracias por su compra.`;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
   }
@@ -1557,6 +1662,185 @@ function mostrarToast(msg) {
 document.getElementById('modalWA').addEventListener('click', function(e) {
   if (e.target === this) cerrarModal();
 });
+
+// ========================
+// PESTAÑAS
+// ========================
+function cambiarTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelector(`[onclick="cambiarTab('${tab}')"]`).classList.add('active');
+  if (tab === 'historial') cargarHistorial();
+}
+
+// ========================
+// HISTORIAL
+// ========================
+let todasLasOrdenes = [];
+
+async function cargarHistorial() {
+  const lista = document.getElementById('historialLista');
+  lista.innerHTML = '<div class="historial-loading">⏳ Cargando órdenes...</div>';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=*&order=created_at.desc&limit=200`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      }
+    });
+
+    if (!res.ok) throw new Error('Error al cargar');
+    const ordenes = await res.json();
+    todasLasOrdenes = ordenes;
+    renderOrdenes(ordenes);
+  } catch(e) {
+    lista.innerHTML = '<div class="historial-empty"><div class="empty-icon">⚠️</div><p>No se pudo cargar el historial. Verifica la conexión.</p></div>';
+  }
+}
+
+function filtrarOrdenes() {
+  const q = document.getElementById('historialBuscar').value.toLowerCase().trim();
+  if (!q) { renderOrdenes(todasLasOrdenes); return; }
+  const filtradas = todasLasOrdenes.filter(o =>
+    (o.cliente || '').toLowerCase().includes(q) ||
+    (o.numero_orden || '').toString().includes(q) ||
+    (o.telefono || '').includes(q) ||
+    (o.cedula || '').includes(q) ||
+    (o.vendedor || '').toLowerCase().includes(q)
+  );
+  renderOrdenes(filtradas);
+}
+
+function formatCOP(n) {
+  if (!n && n !== 0) return '—';
+  return '$' + Number(n).toLocaleString('es-CO');
+}
+
+function formatFecha(f) {
+  if (!f) return '—';
+  const d = new Date(f);
+  return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderOrdenes(ordenes) {
+  const lista = document.getElementById('historialLista');
+  if (!ordenes || ordenes.length === 0) {
+    lista.innerHTML = '<div class="historial-empty"><div class="empty-icon">🗂</div><p>No se encontraron órdenes</p></div>';
+    return;
+  }
+
+  lista.innerHTML = ordenes.map(o => `
+    <div class="orden-card" onclick="verDetalle('${o.id}')">
+      <div class="orden-card-header">
+        <div>
+          <div class="orden-card-num">Orden #${o.numero_orden || o.op || '—'}</div>
+          <div class="orden-card-fecha">${formatFecha(o.fecha_orden || o.created_at)}</div>
+        </div>
+        <span class="orden-card-badge ${o.enviado_whatsapp ? 'badge-enviado' : 'badge-noenv'}">
+          ${o.enviado_whatsapp ? '✅ Enviada' : '📋 Sin enviar'}
+        </span>
+      </div>
+      <div class="orden-card-body">
+        <div class="orden-card-cliente">👤 ${o.cliente || 'Sin nombre'}</div>
+        <div class="orden-card-info">
+          ${o.telefono ? `<span>📞 ${o.telefono}</span>` : ''}
+          ${o.vendedor ? `<span>🏷 ${o.vendedor}</span>` : ''}
+          ${o.metodo_pago ? `<span>💳 ${o.metodo_pago}</span>` : ''}
+        </div>
+        <div class="orden-card-totales">
+          <div class="tot-item">
+            <span class="tot-label">Total</span>
+            <span class="tot-val">${formatCOP(o.valor_total)}</span>
+          </div>
+          <div class="tot-item">
+            <span class="tot-label">Abono</span>
+            <span class="tot-val pagado">${formatCOP(o.abono)}</span>
+          </div>
+          <div class="tot-item">
+            <span class="tot-label">Saldo</span>
+            <span class="tot-val ${o.saldo_pendiente > 0 ? 'saldo' : 'pagado'}">${formatCOP(o.saldo_pendiente)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function verDetalle(id) {
+  const o = todasLasOrdenes.find(x => x.id === id);
+  if (!o) return;
+
+  document.getElementById('detalleTitulo').textContent = `Orden #${o.numero_orden || o.op || '—'}`;
+
+  let productosHTML = '';
+  if (o.productos && Array.isArray(o.productos) && o.productos.length > 0) {
+    productosHTML = `
+      <div style="font-size:13px;font-weight:600;color:var(--brown);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Productos</div>
+      <div class="detalle-productos">
+        ${o.productos.map(p => `
+          <div class="det-prod-row">
+            <span class="det-prod-desc">${p.qty || 1}x ${p.desc || p.descripcion || '—'}</span>
+            <span class="det-prod-val">${p.sub || p.subtotal || '—'}</span>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+
+  let pdfHTML = '';
+  if (o.pdf_url) {
+    pdfHTML = `<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px;">📄 Ver PDF de la orden</a>`;
+  }
+
+  document.getElementById('detalleContenido').innerHTML = `
+    ${pdfHTML}
+    <div class="detalle-grid">
+      <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Teléfono</span><span class="det-val">${o.telefono || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">C.C. / NIT</span><span class="det-val">${o.cedula || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Ciudad</span><span class="det-val">${o.ciudad || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Dirección</span><span class="det-val">${o.direccion || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Vendedor</span><span class="det-val">${o.vendedor || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Forma de pago</span><span class="det-val">${o.metodo_pago || '—'}</span></div>
+      <div class="detalle-field"><span class="det-label">Fecha orden</span><span class="det-val">${formatFecha(o.fecha_orden)}</span></div>
+      <div class="detalle-field"><span class="det-label">Vencimiento</span><span class="det-val">${formatFecha(o.fecha_vencimiento)}</span></div>
+      <div class="detalle-field"><span class="det-label">Enviada WhatsApp</span><span class="det-val">${o.enviado_whatsapp ? '✅ Sí' : '❌ No'}</span></div>
+    </div>
+    ${productosHTML}
+    <div class="orden-card-totales" style="background:var(--cream);border-radius:12px;padding:16px;">
+      <div class="tot-item">
+        <span class="tot-label">Subtotal</span>
+        <span class="tot-val">${formatCOP(o.subtotal)}</span>
+      </div>
+      <div class="tot-item">
+        <span class="tot-label">Total</span>
+        <span class="tot-val">${formatCOP(o.valor_total)}</span>
+      </div>
+      <div class="tot-item">
+        <span class="tot-label">Abono</span>
+        <span class="tot-val pagado">${formatCOP(o.abono)}</span>
+      </div>
+      <div class="tot-item">
+        <span class="tot-label">Saldo pendiente</span>
+        <span class="tot-val ${o.saldo_pendiente > 0 ? 'saldo' : 'pagado'}">${formatCOP(o.saldo_pendiente)}</span>
+      </div>
+    </div>
+    ${o.notas ? `<div style="margin-top:12px;padding:12px;background:var(--cream);border-radius:10px;font-style:italic;color:var(--warm-gray);font-size:13px;">Son: ${o.notas}</div>` : ''}
+  `;
+
+  document.getElementById('detalleOverlay').classList.add('show');
+}
+
+function cerrarDetalle() {
+  document.getElementById('detalleOverlay').classList.remove('show');
+}
+
+// Cerrar detalle al tocar fuera
+document.getElementById('detalleOverlay').addEventListener('click', function(e) {
+  if (e.target === this) cerrarDetalle();
+});
+
 </script>
 </body>
 </html>
