@@ -48,9 +48,9 @@
   /* ============ LAYOUT LISTA ============ */
   .productos-lista .productos-header {
     display: grid;
-    grid-template-columns: 80px 72px 1fr 140px 130px 36px;
-    gap: 10px;
-    padding: 12px 14px;
+    grid-template-columns: 80px 1fr 140px 140px 44px;
+    gap: 8px;
+    padding: 10px 12px;
     background: var(--dark);
     border-radius: 10px 10px 0 0;
     align-items: center;
@@ -70,13 +70,12 @@
   }
   .productos-lista .producto-row {
     display: grid;
-    grid-template-columns: 80px 72px 1fr 140px 130px 36px;
-    gap: 10px;
-    padding: 10px 14px;
+    grid-template-columns: 80px 1fr 140px 140px 44px;
+    gap: 8px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border);
-    align-items: center;
+    align-items: start;
     transition: background 0.15s;
-    animation: fadeInUp 0.3s var(--ease-smooth) both;
   }
   .productos-lista .producto-row:last-child { border-bottom: none; }
   .productos-lista .producto-row:hover { background: var(--cream); }
@@ -495,11 +494,9 @@
 
     </div>
 
-    <!-- LISTA -->
     <div class="productos-lista" id="layoutLista">
       <div class="productos-header">
         <span>Cant.</span>
-        <span style="text-align:center">Foto</span>
         <span>Descripción</span>
         <span style="text-align:right">Vr. Unitario</span>
         <span style="text-align:right">Subtotal</span>

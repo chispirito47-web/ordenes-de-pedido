@@ -113,7 +113,7 @@ function actualizarSubtotalFila(id) {
   const p = productos.find(p => p.id === id);
   if (!p) return;
   const sub = subtotalProducto(p);
-  const el = document.querySelector(`[data-pid="${id}"] .subtotal-display, [data-pid="${id}"] .card-totals-value`);
+  const el = document.getElementById('sub-' + id) || document.querySelector(`[data-pid="${id}"] .subtotal-display`);
   if (el) el.textContent = formatPesos(sub);
 }
 
@@ -129,8 +129,7 @@ function cambiarLayout(nuevo) {
 
 /* ---------- RENDER ---------- */
 function renderProductos() {
-  if (layout === 'lista') renderLista();
-  else renderGaleria();
+  renderLista();
 }
 
 function renderLista() {
@@ -142,42 +141,23 @@ function renderLista() {
     row.dataset.pid = p.id;
     row.innerHTML = `
       <input type="number" placeholder="1" min="1" value="${escapeAttr(p.qty)}" oninput="updateProducto('${p.id}', 'qty', this.value)">
-      ${photoSlotHTML(p.id, p.photo)}
-      <input type="text" placeholder="Cama Montaña 140x190 — color rosa palo" value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <input type="text" placeholder="Descripción del mueble..." value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
+        <div class="foto-mini" data-pid="${p.id}" onclick="abrirFoto('${p.id}')" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border:1px dashed var(--border);border-radius:6px;font-size:11px;color:var(--warm-gray);width:fit-content">
+          ${p.photo ? `<img src="${p.photo}" style="width:28px;height:28px;object-fit:cover;border-radius:4px"> <span>Ver foto</span>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> <span>+ Foto</span>`}
+        </div>
+      </div>
       <input type="text" placeholder="$0" value="${escapeAttr(p.unitario)}" oninput="updateProducto('${p.id}', 'unitario', this.value)" onblur="formatearPrecioInput(this, '${p.id}')" style="text-align:right">
-      <div class="subtotal-display">${formatPesos(subtotalProducto(p))}</div>
+      <div class="subtotal-display" id="sub-${p.id}">${formatPesos(subtotalProducto(p))}</div>
       <button class="btn-delete-row" onclick="eliminarProducto('${p.id}')" title="Eliminar">✕</button>
     `;
     body.appendChild(row);
-    attachPhotoListeners(row, p.id);
   });
 }
 
-function renderGaleria() {
-  const grid = document.getElementById('productosGrid');
-  grid.innerHTML = '';
-  productos.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'producto-card';
-    card.dataset.pid = p.id;
-    card.innerHTML = `
-      <button class="btn-delete-card" onclick="eliminarProducto('${p.id}')" title="Eliminar">✕</button>
-      <div class="card-photo-wrap">${photoSlotHTML(p.id, p.photo, true)}</div>
-      <div class="card-body">
-        <input type="text" class="desc-input" placeholder="Cama Montaña 140x190 — rosa palo" value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
-        <div class="card-row-2">
-          <input type="number" placeholder="Cant." min="1" value="${escapeAttr(p.qty)}" oninput="updateProducto('${p.id}', 'qty', this.value)">
-          <input type="text" placeholder="$ Vr. Unitario" value="${escapeAttr(p.unitario)}" oninput="updateProducto('${p.id}', 'unitario', this.value)" onblur="formatearPrecioInput(this, '${p.id}')" style="text-align:right">
-        </div>
-        <div class="card-totals">
-          <span class="card-totals-label">Subtotal</span>
-          <span class="card-totals-value">${formatPesos(subtotalProducto(p))}</span>
-        </div>
-      </div>
-    `;
-    grid.appendChild(card);
-    attachPhotoListeners(card, p.id);
-  });
+function abrirFoto(pid) {
+  photoTargetId = pid;
+  document.getElementById('photoInput').click();
 }
 
 function escapeAttr(v) {
