@@ -721,7 +721,14 @@
       </div>
       <div class="field">
         <label>Vendedor</label>
-        <input type="text" id="vendedor" placeholder="Nombre del vendedor">
+        <select id="vendedor">
+          <option value="">Seleccionar...</option>
+          <option>Ronald</option>
+          <option>Elisa</option>
+          <option>Damaris</option>
+          <option>Charid</option>
+          <option>Adriana</option>
+        </select>
       </div>
     </div>
   </div>
@@ -784,9 +791,16 @@
         <span class="total-label">Subtotal</span>
         <span class="total-value" id="totalSubtotal">$0</span>
       </div>
-      <div class="total-row">
-        <span class="total-label">Abono</span>
-        <input class="total-input" type="text" id="inputAbono" placeholder="$0" oninput="calcularSaldo()">
+      <div class="total-row" style="align-items:flex-start;flex-direction:column;gap:6px;">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+          <span class="total-label">Abono</span>
+          <button type="button" onclick="agregarAbono()" style="background:var(--gold);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:var(--dark);">+ Agregar</button>
+        </div>
+        <div id="abonosContainer" style="width:100%;display:flex;flex-direction:column;gap:6px;"></div>
+        <div style="display:flex;justify-content:space-between;width:100%;font-size:13px;color:var(--warm-gray);">
+          <span>Total abonado</span>
+          <span id="totalAbonoDisplay" style="font-weight:700;color:var(--green);">$0</span>
+        </div>
       </div>
       <div class="total-row grand">
         <span class="total-label">TOTAL</span>
@@ -908,8 +922,21 @@ window.onload = () => {
   document.getElementById('fechaFactura').value = hoy;
 
   // Número de orden por defecto
-  document.getElementById('numeroOrden').value = 4022;
-  document.getElementById('displayNumero').textContent = '4022';
+  // Obtener siguiente número de orden desde Supabase
+  fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=numero_orden&order=created_at.desc&limit=1`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  }).then(r => r.json()).then(data => {
+    let siguiente = 4023;
+    if (data && data.length > 0 && data[0].numero_orden) {
+      const ultimo = parseInt(data[0].numero_orden);
+      if (!isNaN(ultimo)) siguiente = ultimo + 1;
+    }
+    document.getElementById('numeroOrden').value = siguiente;
+    document.getElementById('displayNumero').textContent = siguiente;
+  }).catch(() => {
+    document.getElementById('numeroOrden').value = 4023;
+    document.getElementById('displayNumero').textContent = '4023';
+  });
 
   // 3 filas iniciales
   agregarFila(); agregarFila(); agregarFila();
@@ -922,8 +949,9 @@ window.onload = () => {
 // ========================
 // PRODUCTOS
 // ========================
+let filaCounter = 1;
 function agregarFila() {
-  const id = Date.now();
+  const id = filaCounter++;
   filas.push(id);
   const body = document.getElementById('productosBody');
   const row = document.createElement('div');
@@ -987,12 +1015,9 @@ function calcularSubtotal(id) {
 
 function calcularTotales() {
   let total = 0;
-  // Recalcular desde el DOM directamente para evitar desync con array filas
-  document.querySelectorAll('.producto-row').forEach(row => {
-    const qtyEl = row.querySelector('input[type="number"]');
-    const priceEl = row.querySelector('input[type="text"]:last-of-type');
-    const qty = parseFloat(qtyEl?.value) || 0;
-    const price = parseMonto(priceEl?.value);
+  filas.forEach(id => {
+    const qty = parseFloat(document.querySelector('.qty-' + id)?.value) || 0;
+    const price = parseMonto(document.querySelector('.price-' + id)?.value);
     total += qty * price;
   });
   document.getElementById('totalSubtotal').textContent = formatPesos(total);
@@ -1001,15 +1026,67 @@ function calcularTotales() {
   actualizarSonLetras(total);
 }
 
+
+
+// ========================
+// ========================
+// ABONO MÚLTIPLE
+// ========================
+function agregarAbono() {
+  const container = document.getElementById('abonosContainer');
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;gap:6px;align-items:center;width:100%;';
+  div.innerHTML = `
+    <select style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--cream);color:var(--dark);" onchange="calcularSaldo()">
+      <option value="">Medio de pago</option>
+      <option>Efectivo</option>
+      <option>Tarjeta</option>
+      <option>Transferencia</option>
+      <option>Nequi</option>
+      <option>Daviplata</option>
+    </select>
+    <input type="text" placeholder="$0" style="width:110px;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;text-align:right;" oninput="formatearAbono(this)" onkeyup="calcularSaldo()" onchange="calcularSaldo()">
+    <button type="button" onclick="this.parentElement.remove();calcularSaldo();" style="background:var(--red);color:white;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;">✕</button>
+  `;
+  container.appendChild(div);
+  calcularSaldo();
+}
+
+function formatearAbono(input) {
+  const raw = input.value.replace(/[^0-9]/g, '');
+  if (raw) input.value = '$' + parseInt(raw).toLocaleString('es-CO');
+  else input.value = '';
+  calcularSaldo();
+}
+
+function getTotalAbonos() {
+  let total = 0;
+  document.querySelectorAll('#abonosContainer input[type=text]').forEach(inp => {
+    total += parseMonto(inp.value);
+  });
+  return total;
+}
+
+function getAbonosDetalle() {
+  const abonos = [];
+  document.querySelectorAll('#abonosContainer > div').forEach(div => {
+    const medio = div.querySelector('select') ? div.querySelector('select').value : '';
+    const inp = div.querySelector('input');
+    const monto = inp ? inp.value : '';
+    if (medio && parseMonto(monto) > 0) abonos.push({ medio, monto });
+  });
+  return abonos;
+}
+
 function calcularSaldo() {
-  const totalEl = document.getElementById('totalGeneral').textContent;
-  const total = parseMonto(totalEl);
-  const abono = parseMonto(document.getElementById('inputAbono').value);
+  const total = parseMonto(document.getElementById('totalGeneral').textContent);
+  const abono = getTotalAbonos();
   const saldo = total - abono;
+  const display = document.getElementById('totalAbonoDisplay');
+  if (display) display.textContent = '$' + abono.toLocaleString('es-CO');
   document.getElementById('totalSaldo').textContent = formatPesos(saldo >= 0 ? saldo : 0);
 }
 
-// ========================
 // NÚMERO EN LETRAS
 // ========================
 function numeroALetras(num) {
@@ -1148,7 +1225,8 @@ function getDatos() {
     cc: document.getElementById('clienteCC').value,
     tel: document.getElementById('clienteTel').value,
     correo: document.getElementById('clienteCorreo').value,
-    abono: document.getElementById('inputAbono').value,
+    abono: '$' + getTotalAbonos().toLocaleString('es-CO'),
+    abonosDetalle: getAbonosDetalle(),
     total: document.getElementById('totalGeneral').textContent,
     saldo: document.getElementById('totalSaldo').textContent,
     son: document.getElementById('sonLetras').textContent,
@@ -1341,6 +1419,7 @@ async function generarPDFBlob() {
   const totW = contentW * 0.38;
   const totales = [
     { label: 'ABONO $', value: datos.abono || '$0', bg: [240, 237, 230] },
+    { label: '', value: datos.abonosDetalle ? datos.abonosDetalle.map(a => `${a.medio}: ${a.monto}`).join(' | ') : '', bg: [245, 242, 235] },
     { label: 'SALDO $', value: datos.saldo, bg: [240, 237, 230] },
     { label: 'TOTAL $', value: datos.total, bg: [28, 26, 23] },
   ];
@@ -1584,7 +1663,8 @@ async function enviarWhatsApp() {
           productos: productos2,
           subtotal: limpiarNum(datos.subtotal),
           valor_total: limpiarNum(datos.total),
-          abono: limpiarNum(datos.abono),
+          abono: getTotalAbonos(),
+          abonos_detalle: getAbonosDetalle(),
           saldo_pendiente: limpiarNum(datos.saldo),
           pdf_url: pdfLink||'', enviado_whatsapp: true,
           notas: datos.son||''
@@ -1610,8 +1690,21 @@ async function enviarWhatsApp() {
 function limpiarTodo() {
   if (!confirm('¿Crear nueva orden? Se perderán los datos actuales.')) return;
 
-  document.getElementById('numeroOrden').value = parseInt(document.getElementById('numeroOrden').value || 4021) + 1;
-  document.getElementById('displayNumero').textContent = document.getElementById('numeroOrden').value;
+  fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=numero_orden&order=created_at.desc&limit=1`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  }).then(r => r.json()).then(data => {
+    let siguiente = 4023;
+    if (data && data.length > 0 && data[0].numero_orden) {
+      const ultimo = parseInt(data[0].numero_orden);
+      if (!isNaN(ultimo)) siguiente = ultimo + 1;
+    }
+    document.getElementById('numeroOrden').value = siguiente;
+    document.getElementById('displayNumero').textContent = siguiente;
+  }).catch(() => {
+    const actual = parseInt(document.getElementById('numeroOrden').value || 4022);
+    document.getElementById('numeroOrden').value = actual + 1;
+    document.getElementById('displayNumero').textContent = actual + 1;
+  });
   document.getElementById('fechaFactura').value = new Date().toISOString().split('T')[0];
   document.getElementById('fechaVencimiento').value = '';
   document.getElementById('formaPago').value = '';
@@ -1622,13 +1715,14 @@ function limpiarTodo() {
   document.getElementById('clienteCC').value = '';
   document.getElementById('clienteTel').value = '';
   document.getElementById('clienteCorreo').value = '';
-  document.getElementById('inputAbono').value = '';
+  document.getElementById('abonosContainer').innerHTML = ''; calcularSaldo();
   document.getElementById('totalSubtotal').textContent = '$0';
   document.getElementById('totalGeneral').textContent = '$0';
   document.getElementById('totalSaldo').textContent = '$0';
   document.getElementById('sonLetras').textContent = '—';
 
   filas = [];
+  filaCounter = 1;
   document.getElementById('productosBody').innerHTML = '';
   agregarFila(); agregarFila(); agregarFila();
 
@@ -1780,6 +1874,8 @@ function verDetalle(id) {
     pdfHTML = `<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px;">📄 Ver PDF de la orden</a>`;
   }
 
+  const saldoPendiente = o.saldo_pendiente || 0;
+
   document.getElementById('detalleContenido').innerHTML = `
     ${pdfHTML}
     <div class="detalle-grid">
@@ -1795,28 +1891,123 @@ function verDetalle(id) {
       <div class="detalle-field"><span class="det-label">Enviada WhatsApp</span><span class="det-val">${o.enviado_whatsapp ? '✅ Sí' : '❌ No'}</span></div>
     </div>
     ${productosHTML}
-    <div class="orden-card-totales" style="background:var(--cream);border-radius:12px;padding:16px;">
-      <div class="tot-item">
-        <span class="tot-label">Subtotal</span>
-        <span class="tot-val">${formatCOP(o.subtotal)}</span>
-      </div>
+    <div class="orden-card-totales" style="background:var(--cream);border-radius:12px;padding:16px;margin-bottom:16px;">
       <div class="tot-item">
         <span class="tot-label">Total</span>
         <span class="tot-val">${formatCOP(o.valor_total)}</span>
       </div>
       <div class="tot-item">
-        <span class="tot-label">Abono</span>
+        <span class="tot-label">Abonado</span>
         <span class="tot-val pagado">${formatCOP(o.abono)}</span>
       </div>
       <div class="tot-item">
         <span class="tot-label">Saldo pendiente</span>
-        <span class="tot-val ${o.saldo_pendiente > 0 ? 'saldo' : 'pagado'}">${formatCOP(o.saldo_pendiente)}</span>
+        <span class="tot-val ${saldoPendiente > 0 ? 'saldo' : 'pagado'}" id="detalleSaldo">${formatCOP(saldoPendiente)}</span>
       </div>
     </div>
+    ${saldoPendiente > 0 ? `
+    <div style="background:var(--white);border:1.5px solid var(--gold);border-radius:14px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--brown);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">💰 Registrar nuevo abono</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;">
+        <select id="abonoMedio" style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;background:var(--cream);">
+          <option value="">Medio de pago</option>
+          <option>Efectivo</option>
+          <option>Tarjeta</option>
+          <option>Transferencia</option>
+          <option>Nequi</option>
+          <option>Daviplata</option>
+        </select>
+        <input type="text" id="abonoMonto" placeholder="$0" oninput="formatearAbonoHistorial(this)" style="width:130px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;text-align:right;">
+      </div>
+      <button type="button" onclick="registrarAbono('${o.id}')" style="width:100%;background:var(--green);color:white;border:none;border-radius:10px;padding:12px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;cursor:pointer;">
+        ✅ Registrar abono y notificar cliente
+      </button>
+      <div id="abonoStatus" style="margin-top:8px;font-size:13px;text-align:center;color:var(--warm-gray);"></div>
+    </div>` : `
+    <div style="background:#D1FAE5;border-radius:12px;padding:14px;text-align:center;font-weight:700;color:#065F46;font-size:15px;">
+      ✅ Orden completamente pagada
+    </div>`}
     ${o.notas ? `<div style="margin-top:12px;padding:12px;background:var(--cream);border-radius:10px;font-style:italic;color:var(--warm-gray);font-size:13px;">Son: ${o.notas}</div>` : ''}
   `;
 
   document.getElementById('detalleOverlay').classList.add('show');
+}
+
+function formatearAbonoHistorial(input) {
+  const raw = input.value.replace(/[^0-9]/g, '');
+  if (raw) input.value = '$' + parseInt(raw).toLocaleString('es-CO');
+  else input.value = '';
+}
+
+async function registrarAbono(ordenId) {
+  const medio = document.getElementById('abonoMedio').value;
+  const montoStr = document.getElementById('abonoMonto').value;
+  const monto = parseMonto(montoStr);
+  const status = document.getElementById('abonoStatus');
+
+  if (!medio) { status.textContent = '⚠️ Selecciona el medio de pago'; status.style.color = 'var(--red)'; return; }
+  if (monto <= 0) { status.textContent = '⚠️ Ingresa un monto válido'; status.style.color = 'var(--red)'; return; }
+
+  const o = todasLasOrdenes.find(x => x.id === ordenId);
+  if (!o) return;
+
+  const nuevoAbono = (o.abono || 0) + monto;
+  const nuevoSaldo = (o.valor_total || 0) - nuevoAbono;
+
+  status.textContent = '⏳ Guardando...';
+  status.style.color = 'var(--warm-gray)';
+
+  // 1. Actualizar en Supabase
+  const resUpdate = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({
+      abono: nuevoAbono,
+      saldo_pendiente: nuevoSaldo >= 0 ? nuevoSaldo : 0
+    })
+  });
+
+  if (!resUpdate.ok) {
+    status.textContent = '❌ Error al guardar. Intenta de nuevo.';
+    status.style.color = 'var(--red)';
+    return;
+  }
+
+  // 2. Enviar WhatsApp al cliente
+  status.textContent = '⏳ Notificando al cliente...';
+  const telefono = (o.telefono || '').replace(/\D/g, '');
+  if (telefono) {
+    const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
+    const estadoPago = nuevoSaldo <= 0 ? '🎉 *¡Tu orden está completamente pagada!*' : `📋 *Saldo pendiente:* ${formatCOP(nuevoSaldo)}`;
+    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${o.cliente || 'cliente'}*, se ha registrado un abono a tu orden N° *${o.numero_orden || o.op}*:\n\n💵 *Abono registrado:* ${formatCOP(monto)} (${medio})\n💰 *Total abonado:* ${formatCOP(nuevoAbono)}\n${estadoPago}\n\n✅ Gracias por tu pago.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+
+    await fetch('/api/waha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: '/api/sendText',
+        payload: { session: 'default', chatId, text: mensaje }
+      })
+    });
+  }
+
+  // 3. Actualizar localmente
+  o.abono = nuevoAbono;
+  o.saldo_pendiente = nuevoSaldo >= 0 ? nuevoSaldo : 0;
+
+  status.textContent = '✅ Abono registrado y cliente notificado';
+  status.style.color = 'var(--green)';
+
+  // Recargar historial después de 1.5s y cerrar
+  setTimeout(() => {
+    cerrarDetalle();
+    cargarHistorial();
+  }, 1500);
 }
 
 function cerrarDetalle() {
