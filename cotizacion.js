@@ -1,3 +1,6 @@
+const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
+
 /* =========================================================
    COTIZACIÓN — Lógica
    ========================================================= */
@@ -732,6 +735,32 @@ Quedamos atentos a su confirmación.
 
     const res = await enviarMensajeWA(chatId, mensaje);
     if (res.ok) {
+      // Guardar en Supabase
+      try {
+        await fetch(`${SUPA_URL}/rest/v1/cotizaciones`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPA_KEY,
+            'Authorization': 'Bearer ' + SUPA_KEY,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            numero_cotizacion: d.numero,
+            cliente: d.nombre || '',
+            telefono: d.tel || '',
+            fecha_cotizacion: d.fecha || new Date().toISOString().split('T')[0],
+            fecha_vencimiento: d.fechaVencimiento || null,
+            tiempo_entrega: d.tiempoEntrega || '',
+            vendedor: d.vendedor || '',
+            productos: productos.map(p => ({ qty: p.qty, desc: p.desc, unitario: p.unitario, sub: formatPesos(subtotalProducto(p)) })),
+            valor_total: parseMonto(d.total),
+            pdf_url: pdfLink || '',
+            enviado_whatsapp: true,
+            notas: d.son || ''
+          })
+        });
+      } catch(e) { console.warn('No se pudo guardar en Supabase:', e); }
       mostrarToast(pdfLink ? '✓ Cotización enviada con PDF' : '✓ Mensaje enviado');
     } else {
       throw new Error('WAHA error');
@@ -775,4 +804,102 @@ function nuevaCotizacion() {
   actualizarVencimiento();
 
   mostrarToast('✓ Nueva cotización lista');
+}
+
+
+/* =========================================================
+   HISTORIAL DE COTIZACIONES
+   ========================================================= */
+let todasLasCotizaciones = [];
+
+async function cargarHistorialCotizaciones() {
+  const lista = document.getElementById('historialCotLista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⏳ Cargando...</div>';
+  try {
+    const res = await fetch(`${SUPA_URL}/rest/v1/cotizaciones?select=*&order=created_at.desc&limit=100`, {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+    });
+    if (!res.ok) throw new Error('Error');
+    const data = await res.json();
+    todasLasCotizaciones = data;
+    renderCotizaciones(data);
+  } catch(e) {
+    lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⚠️ No se pudo cargar el historial</div>';
+  }
+}
+
+function filtrarCotizaciones() {
+  const q = (document.getElementById('historialCotBuscar')?.value || '').toLowerCase().trim();
+  if (!q) { renderCotizaciones(todasLasCotizaciones); return; }
+  renderCotizaciones(todasLasCotizaciones.filter(c =>
+    (c.cliente||'').toLowerCase().includes(q) ||
+    (c.numero_cotizacion||'').toLowerCase().includes(q) ||
+    (c.telefono||'').includes(q) ||
+    (c.vendedor||'').toLowerCase().includes(q)
+  ));
+}
+
+function formatCOPH(n) { if(!n&&n!==0)return'—'; return'$'+Number(n).toLocaleString('es-CO'); }
+function formatFechaH(f) { if(!f)return'—'; return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); }
+
+function renderCotizaciones(lista) {
+  const el = document.getElementById('historialCotLista');
+  if (!el) return;
+  if (!lista || lista.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray)"><div style="font-size:48px;margin-bottom:12px">🗂</div><p>No hay cotizaciones guardadas</p></div>';
+    return;
+  }
+  el.innerHTML = lista.map(c => `
+    <div style="background:var(--white);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);cursor:pointer;transition:all 0.2s" onclick="verDetalleCot('${c.id}')" onmouseover="this.style.borderColor='#C49A3C'" onmouseout="this.style.borderColor='#D4C9B8'">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--cream);border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
+          <div style="font-size:12px;color:var(--warm-gray)">${formatFechaH(c.fecha_cotizacion||c.created_at)}</div>
+        </div>
+        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">
+          ${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}
+        </span>
+      </div>
+      <div style="padding:14px 18px">
+        <div style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:6px">👤 ${c.cliente||'Sin nombre'}</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--warm-gray)">
+          ${c.telefono?`<span>📞 ${c.telefono}</span>`:''}
+          ${c.vendedor?`<span>🧑 ${c.vendedor}</span>`:''}
+          ${c.fecha_vencimiento?`<span>📅 Vence: ${formatFechaH(c.fecha_vencimiento)}</span>`:''}
+        </div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:16px">
+          <div><div style="font-size:10px;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700">${formatCOPH(c.valor_total)}</div></div>
+          ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;background:var(--gold);color:var(--dark);padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;margin-left:auto;align-self:center">📄 PDF</a>`:''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function verDetalleCot(id) {
+  const c = todasLasCotizaciones.find(x => x.id === id);
+  if (!c) return;
+  const overlay = document.getElementById('detalleCotOverlay');
+  const titulo = document.getElementById('detalleCotTitulo');
+  const contenido = document.getElementById('detalleCotContenido');
+  if (!overlay) return;
+  titulo.textContent = `Cotización ${c.numero_cotizacion||'—'}`;
+  let productosHTML = '';
+  if (c.productos && c.productos.length > 0) {
+    productosHTML = `<div style="background:var(--cream);border-radius:10px;padding:14px;margin-bottom:16px">${c.productos.map(p=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px"><span>${p.qty||1}x ${p.desc||'—'}</span><span style="font-weight:600;color:var(--brown)">${p.sub||'—'}</span></div>`).join('')}</div>`;
+  }
+  contenido.innerHTML = `
+    ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">📄 Ver PDF de la cotización</a>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Cliente</div><div style="font-size:15px;font-weight:500">${c.cliente||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Teléfono</div><div style="font-size:15px;font-weight:500">${c.telefono||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Vendedor</div><div style="font-size:15px;font-weight:500">${c.vendedor||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Fecha</div><div style="font-size:15px;font-weight:500">${formatFechaH(c.fecha_cotizacion)}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Vence</div><div style="font-size:15px;font-weight:500">${formatFechaH(c.fecha_vencimiento)}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green)">${formatCOPH(c.valor_total)}</div></div>
+    </div>
+    ${productosHTML}
+  `;
+  overlay.classList.add('show');
 }
