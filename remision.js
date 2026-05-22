@@ -1,7 +1,3 @@
-const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
-let fotoEntregaDataUrl = null;
-
 /* =========================================================
    REMISIÓN — Lógica
    ========================================================= */
@@ -58,50 +54,51 @@ function formatNumRem(n) {
   return 'REM-' + String(n).padStart(4, '0');
 }
 
-/* ---------- MUEBLES — igual que orden.html ---------- */
-let filaCounter = 1;
-let filas = [];
-let fotosPorFila = {};
-let fotoTargetFila = null;
-
+/* ---------- PRODUCTOS ---------- */
 function agregarFila() {
-  const id = filaCounter++;
-  filas.push(id);
+  const id = Date.now() + Math.random().toString(36).slice(2, 5);
+  items.push({ id, qty: '', desc: '' });
+  renderItems();
+  setTimeout(() => {
+    const el = document.querySelector(`[data-iid="${id}"] input.qty-input`);
+    if (el) el.focus();
+  }, 50);
+}
+
+function eliminarFila(id) {
+  items = items.filter(i => i.id !== id);
+  renderItems();
+}
+
+function updateItem(id, campo, valor) {
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  it[campo] = valor;
+  actualizarContador();
+}
+
+function renderItems() {
   const body = document.getElementById('productosBody');
-  const row = document.createElement('div');
-  row.className = 'producto-row';
-  row.id = 'fila-' + id;
-  row.innerHTML = `
-    <input type="number" placeholder="1" min="1" value="1" class="qty-rem-${id}">
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <input type="text" placeholder="Ej: Cama Montaña 140x190 — color negro" class="desc-rem-${id}">
-      <div onclick="abrirFotoRem(${id})" id="fotobtn-rem-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span id="fototxt-rem-${id}">+ Foto mueble</span>
-      </div>
-    </div>
-    <button class="btn-delete-row" onclick="eliminarFilaRem(${id})" title="Eliminar">✕</button>
-  `;
-  body.appendChild(row);
-}
-
-function eliminarFilaRem(id) {
-  const row = document.getElementById('fila-' + id);
-  if (row) row.remove();
-  filas = filas.filter(f => f !== id);
-  delete fotosPorFila[id];
-}
-
-function updateItem(id, campo, valor) { /* compatibilidad */ }
-
-function abrirFotoRem(id) {
-  fotoTargetFila = id;
-  document.getElementById('fotoItemInput').click();
+  body.innerHTML = '';
+  items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'producto-row';
+    row.dataset.iid = it.id;
+    row.innerHTML = `
+      <input type="number" class="qty-input" min="1" placeholder="1" value="${escapeAttr(it.qty)}" oninput="updateItem('${it.id}', 'qty', this.value)">
+      <input type="text" placeholder="Ej: Sillas barra Montaña — color negro" value="${escapeAttr(it.desc)}" oninput="updateItem('${it.id}', 'desc', this.value)">
+      <button class="btn-delete-row" onclick="eliminarFila('${it.id}')" title="Eliminar">✕</button>
+    `;
+    body.appendChild(row);
+  });
+  actualizarContador();
 }
 
 function actualizarContador() {
+  const total = items.filter(i => i.qty || i.desc).length;
+  const cantTotal = items.reduce((acc, i) => acc + (parseInt(i.qty) || 0), 0);
   const badge = document.getElementById('contadorBadge');
-  if (badge) badge.textContent = `${filas.length} items`;
+  if (badge) badge.textContent = cantTotal > 0 ? `${cantTotal} ${cantTotal === 1 ? 'unidad' : 'unidades'}` : `${total} items`;
 }
 
 function escapeAttr(v) {
@@ -143,36 +140,19 @@ async function cargarDesdeOrden() {
     if (orden.vendedor) document.getElementById('vendedor').value = orden.vendedor;
 
     // Cargar productos (sin precios)
-    filas = []; filaCounter = 1; fotosPorFila = {};
-    document.getElementById('productosBody').innerHTML = '';
     if (Array.isArray(orden.productos) && orden.productos.length > 0) {
-      const productosOrden = orden.productos.filter(p => p.qty || p.desc);
-      if (productosOrden.length === 0) {
+      items = orden.productos
+        .filter(p => p.qty || p.desc)
+        .map(p => ({
+          id: Date.now() + Math.random().toString(36).slice(2, 5),
+          qty: p.qty || '',
+          desc: p.desc || ''
+        }));
+      if (items.length === 0) {
         agregarFila();
       } else {
-        productosOrden.forEach(p => {
-          const id = filaCounter++;
-          filas.push(id);
-          const body = document.getElementById('productosBody');
-          const row = document.createElement('div');
-          row.className = 'producto-row';
-          row.id = 'fila-' + id;
-          row.innerHTML = `
-            <input type="number" placeholder="1" min="1" value="${p.qty || 1}" class="qty-rem-${id}">
-            <div style="display:flex;flex-direction:column;gap:4px">
-              <input type="text" placeholder="Descripción..." value="${p.desc || ''}" class="desc-rem-${id}">
-              <div onclick="abrirFotoRem(${id})" id="fotobtn-rem-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                <span id="fototxt-rem-${id}">+ Foto mueble</span>
-              </div>
-            </div>
-            <button class="btn-delete-row" onclick="eliminarFilaRem(${id})">✕</button>
-          `;
-          body.appendChild(row);
-        });
+        renderItems();
       }
-    } else {
-      agregarFila();
     }
 
     // Mostrar info de referencia
@@ -320,11 +300,7 @@ async function generarPDFBlob() {
   y += 10;
 
   // Filas
-  const itemsValidos = filas.map(id => ({
-    qty: document.querySelector('.qty-rem-' + id)?.value || '1',
-    desc: document.querySelector('.desc-rem-' + id)?.value || '',
-    photo: fotosPorFila[id] || null
-  })).filter(i => i.desc);
+  const itemsValidos = items.filter(i => i.qty || i.desc);
   const minRows = 6;
   const totalRows = Math.max(itemsValidos.length, minRows);
   const rowH = 11;
@@ -519,10 +495,9 @@ async function enviarWA() {
 
     mostrarToast('⏳ Enviando por WhatsApp...');
     const chatId = numero + '@c.us';
-    const itemsTxt = filas
-      .map(id => ({ qty: document.querySelector('.qty-rem-' + id)?.value || '1', desc: document.querySelector('.desc-rem-' + id)?.value || '' }))
-      .filter(i => i.desc)
-      .map(i => `• ${i.qty}x ${i.desc}`)
+    const itemsTxt = items
+      .filter(i => i.qty || i.desc)
+      .map(i => `• ${i.qty || 1}x ${i.desc}`)
       .join('\n');
 
     const mensaje = `🛋️ *CASA DAMS — Remisión ${d.numero}*
@@ -543,28 +518,24 @@ ${pdfLink ? `\n📄 ${pdfLink}` : ''}
     const res = await enviarMensajeWA(chatId, mensaje);
     if (res.ok) {
       try {
+        const _SU = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+        const _SK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
         const d2 = getDatos();
-        await fetch(`${SUPA_URL}/rest/v1/remisiones`, {
+        await fetch(`${_SU}/rest/v1/remisiones`, {
           method: 'POST',
-          headers: { 'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal' },
+          headers: {'Content-Type':'application/json','apikey':_SK,'Authorization':'Bearer '+_SK,'Prefer':'return=minimal'},
           body: JSON.stringify({
-            numero_remision: d2.numero,
-            orden_ref: d2.ordenRef || '',
-            cliente: d2.nombre || '',
-            telefono: d2.tel || '',
-            cedula: d2.cc || '',
-            direccion: d2.direccion || '',
-            ciudad: d2.ciudad || '',
-            fecha_entrega: d2.fecha || new Date().toISOString().split('T')[0],
-            vendedor: d2.vendedor || '',
-            items: filas.map(id => ({ qty: document.querySelector('.qty-rem-' + id)?.value || '1', desc: document.querySelector('.desc-rem-' + id)?.value || '' })).filter(i => i.desc),
-            observaciones: d2.observaciones || '',
-            foto_url: fotoEntregaDataUrl ? 'local' : '',
-            pdf_url: pdfLink || '',
-            enviado_whatsapp: true
+            numero_remision: d2.numero, orden_ref: d2.ordenRef||'',
+            cliente: d2.nombre||'', telefono: d2.tel||'',
+            cedula: d2.cc||'', direccion: d2.direccion||'',
+            ciudad: d2.ciudad||'', fecha_entrega: d2.fecha||new Date().toISOString().split('T')[0],
+            vendedor: d2.vendedor||'',
+            items: items.filter(i=>i.qty||i.desc),
+            observaciones: d2.observaciones||'',
+            pdf_url: pdfLink||'', enviado_whatsapp: true
           })
         });
-      } catch(e) { console.warn('No se pudo guardar en Supabase:', e); }
+      } catch(e) { console.warn('Supabase error:', e); }
       mostrarToast(pdfLink ? '✓ Remisión enviada con PDF' : '✓ Mensaje enviado');
     } else {
       throw new Error('WAHA error');
@@ -598,8 +569,7 @@ function nuevaRemision() {
   document.getElementById('clienteTel').value = '';
   document.getElementById('observaciones').value = '';
 
-  filas = []; filaCounter = 1; fotosPorFila = {};
-  document.getElementById('productosBody').innerHTML = '';
+  items = [];
   agregarFila(); agregarFila();
 
   limpiarFirma('firmaComprador');
@@ -612,118 +582,68 @@ function nuevaRemision() {
 
 
 /* =========================================================
-   FOTO DE ENTREGA
+   PESTAÑAS + HISTORIAL REMISIONES
    ========================================================= */
-function cargarFotoEntrega(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    fotoEntregaDataUrl = e.target.result;
-    const preview = document.getElementById('fotoEntregaPreview');
-    const placeholder = document.getElementById('fotoEntregaPlaceholder');
-    const btnQuitar = document.getElementById('btnQuitarFoto');
-    const wrap = document.getElementById('fotoEntregaWrap');
-    preview.src = fotoEntregaDataUrl;
-    preview.style.display = 'block';
-    placeholder.style.display = 'none';
-    btnQuitar.style.display = 'inline-block';
-    wrap.style.border = '2px solid var(--gold)';
-  };
-  reader.readAsDataURL(file);
+const _RSU = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+const _RSK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
+let _remisiones = [];
+
+function cambiarTabRem(tab) {
+  const btnN = document.getElementById('tabBtnRem');
+  const btnH = document.getElementById('tabBtnHistRem');
+  const tN = document.getElementById('tabRemNueva');
+  const tH = document.getElementById('tabRemHistorial');
+  if (!btnN) return;
+  if (tab === 'historial') {
+    tN.style.display='none'; tH.style.display='block';
+    btnN.style.color='#9E9488'; btnN.style.borderBottomColor='transparent';
+    btnH.style.color='#C49A3C'; btnH.style.borderBottomColor='#C49A3C';
+    cargarHistorialRem();
+  } else {
+    tN.style.display='block'; tH.style.display='none';
+    btnN.style.color='#C49A3C'; btnN.style.borderBottomColor='#C49A3C';
+    btnH.style.color='#9E9488'; btnH.style.borderBottomColor='transparent';
+  }
 }
 
-function quitarFotoEntrega() {
-  fotoEntregaDataUrl = null;
-  document.getElementById('fotoEntregaPreview').style.display = 'none';
-  document.getElementById('fotoEntregaPreview').src = '';
-  document.getElementById('fotoEntregaPlaceholder').style.display = 'block';
-  document.getElementById('btnQuitarFoto').style.display = 'none';
-  document.getElementById('fotoEntregaWrap').style.border = '2px dashed var(--border)';
-  document.getElementById('fotoEntregaInput').value = '';
-}
-
-/* =========================================================
-   HISTORIAL DE REMISIONES
-   ========================================================= */
-let todasLasRemisiones = [];
-
-async function cargarHistorialRemisiones() {
+async function cargarHistorialRem() {
   const lista = document.getElementById('historialRemLista');
   if (!lista) return;
-  lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⏳ Cargando...</div>';
+  lista.innerHTML = '<div style="text-align:center;padding:40px;color:#9E9488">⏳ Cargando...</div>';
   try {
-    const res = await fetch(`${SUPA_URL}/rest/v1/remisiones?select=*&order=created_at.desc&limit=100`, {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+    const res = await fetch(`${_RSU}/rest/v1/remisiones?select=*&order=created_at.desc&limit=100`, {
+      headers: { 'apikey': _RSK, 'Authorization': 'Bearer ' + _RSK }
     });
-    if (!res.ok) throw new Error('Error');
-    const data = await res.json();
-    todasLasRemisiones = data;
-    renderRemisiones(data);
+    _remisiones = await res.json();
+    renderHistRem(_remisiones);
   } catch(e) {
-    lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⚠️ No se pudo cargar el historial</div>';
+    lista.innerHTML = '<div style="text-align:center;padding:40px;color:#9E9488">⚠️ Error al cargar</div>';
   }
 }
 
 function filtrarRemisiones() {
-  const q = (document.getElementById('historialRemBuscar')?.value || '').toLowerCase().trim();
-  if (!q) { renderRemisiones(todasLasRemisiones); return; }
-  renderRemisiones(todasLasRemisiones.filter(r =>
-    (r.cliente||'').toLowerCase().includes(q) ||
-    (r.numero_remision||'').toLowerCase().includes(q) ||
-    (r.telefono||'').includes(q) ||
-    (r.vendedor||'').toLowerCase().includes(q)
-  ));
+  const q = (document.getElementById('historialRemBuscar')?.value||'').toLowerCase();
+  renderHistRem(q ? _remisiones.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.numero_remision||'').toLowerCase().includes(q)||(r.vendedor||'').toLowerCase().includes(q)) : _remisiones);
 }
 
-function formatFechaR(f) { if(!f)return'—'; return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); }
-
-function renderRemisiones(lista) {
+function renderHistRem(lista) {
   const el = document.getElementById('historialRemLista');
   if (!el) return;
-  if (!lista || lista.length === 0) {
-    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray)"><div style="font-size:48px;margin-bottom:12px">🗂</div><p>No hay remisiones guardadas</p></div>';
-    return;
-  }
-  el.innerHTML = lista.map(r => `
-    <div style="background:var(--white);border-radius:14px;border:1px solid #D4C9B8;margin-bottom:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04)">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--cream);border-bottom:1px solid #D4C9B8">
-        <div>
-          <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${r.numero_remision||'—'}</div>
-          <div style="font-size:12px;color:#9E9488">${formatFechaR(r.fecha_entrega||r.created_at)}</div>
-        </div>
-        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${r.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${r.enviado_whatsapp?'#065F46':'#991B1B'}">
-          ${r.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}
-        </span>
+  if (!lista||lista.length===0) { el.innerHTML='<div style="text-align:center;padding:60px;color:#9E9488"><div style="font-size:48px">🗂</div><p>No hay remisiones</p></div>'; return; }
+  const fH = f => { if(!f)return'—'; return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); };
+  el.innerHTML = lista.map(r=>`
+    <div style="background:#FDFCF9;border-radius:14px;border:1px solid #D4C9B8;margin-bottom:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#F5F0E8;border-bottom:1px solid #D4C9B8">
+        <div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${r.numero_remision||'—'}</div>
+        <div style="font-size:12px;color:#9E9488">${fH(r.fecha_entrega)}</div></div>
+        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${r.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${r.enviado_whatsapp?'#065F46':'#991B1B'}">${r.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
       </div>
       <div style="padding:14px 18px">
         <div style="font-size:16px;font-weight:600;margin-bottom:6px">👤 ${r.cliente||'Sin nombre'}</div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:#9E9488">
-          ${r.telefono?`<span>📞 ${r.telefono}</span>`:''}
-          ${r.vendedor?`<span>🧑 ${r.vendedor}</span>`:''}
-          ${r.direccion?`<span>📍 ${r.direccion}</span>`:''}
+        <div style="display:flex;gap:16px;font-size:13px;color:#9E9488">
+          ${r.telefono?`<span>📞 ${r.telefono}</span>`:''}${r.vendedor?`<span>🧑 ${r.vendedor}</span>`:''}${r.direccion?`<span>📍 ${r.direccion}</span>`:''}
         </div>
-        ${r.pdf_url?`<div style="margin-top:10px"><a href="${r.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#C49A3C;color:#1C1A17;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">📄 Ver PDF</a></div>`:''}
+        ${r.pdf_url?`<div style="margin-top:10px"><a href="${r.pdf_url}" target="_blank" style="background:#C49A3C;color:#1C1A17;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">📄 Ver PDF</a></div>`:''}
       </div>
-    </div>
-  `).join('');
-}
-
-function cambiarTabRem(tab) {
-  const nueva = document.getElementById('tabRemNueva');
-  const hist = document.getElementById('tabRemHistorial');
-  const btnNueva = document.getElementById('tabBtnRem');
-  const btnHist = document.getElementById('tabBtnHistRem');
-  if (tab === 'historial') {
-    nueva.style.display = 'none';
-    hist.style.display = 'block';
-    btnNueva.style.color = '#9E9488'; btnNueva.style.borderBottomColor = 'transparent';
-    btnHist.style.color = '#C49A3C'; btnHist.style.borderBottomColor = '#C49A3C';
-    cargarHistorialRemisiones();
-  } else {
-    nueva.style.display = 'block';
-    hist.style.display = 'none';
-    btnNueva.style.color = '#C49A3C'; btnNueva.style.borderBottomColor = '#C49A3C';
-    btnHist.style.color = '#9E9488'; btnHist.style.borderBottomColor = 'transparent';
-  }
+    </div>`).join('');
 }

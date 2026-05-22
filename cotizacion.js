@@ -1,6 +1,3 @@
-const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
-
 /* =========================================================
    COTIZACIÓN — Lógica
    ========================================================= */
@@ -20,8 +17,9 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('numeroCotizacion').value = formatNumCotizacion(num);
   document.getElementById('displayNumero').textContent = formatNumCotizacion(num);
 
-  // 3 filas iniciales
-  agregarProducto(); agregarProducto(); agregarProducto();
+  // 2 productos iniciales para empezar a llenar
+  agregarProducto();
+  agregarProducto();
 
   // Vencimiento inicial
   actualizarVencimiento();
@@ -50,19 +48,10 @@ window.addEventListener('DOMContentLoaded', () => {
   // Photo input handler
   document.getElementById('photoInput').addEventListener('change', e => {
     const file = e.target.files[0];
-    if (file && fotoTargetFila !== null) {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        fotosPorFila[fotoTargetFila] = ev.target.result;
-        const btn = document.getElementById('fotobtn-' + fotoTargetFila);
-        const txt = document.getElementById('fototxt-' + fotoTargetFila);
-        if (btn) btn.style.borderColor = '#C49A3C';
-        if (txt) txt.textContent = '✓ Foto';
-      };
-      reader.readAsDataURL(file);
+    if (file && photoTargetId !== null) {
+      cargarFotoEnProducto(photoTargetId, file);
     }
     e.target.value = '';
-    fotoTargetFila = null;
   });
 
   // Modal close
@@ -84,76 +73,31 @@ function actualizarVencimiento() {
   document.getElementById('fechaVencimiento').textContent = formatDate(venc);
 }
 
-/* ---------- PRODUCTOS — igual que orden.html + foto ---------- */
-let filaCounter = 1;
-let filas = [];
-
+/* ---------- PRODUCTOS — DATOS ---------- */
 function agregarProducto() {
-  const id = filaCounter++;
-  filas.push(id);
-  const body = document.getElementById('productosBody');
-  const row = document.createElement('div');
-  row.className = 'producto-row';
-  row.id = 'fila-' + id;
-  row.innerHTML = `
-    <input type="number" placeholder="1" min="1" oninput="calcularSubtotalCot(${id})" class="qty-cot-${id}" value="1">
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <input type="text" placeholder="Descripción del mueble..." class="desc-cot-${id}">
-      <div onclick="abrirFotoCot(${id})" id="fotobtn-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content;background:transparent">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        <span id="fototxt-${id}">+ Foto</span>
-      </div>
-    </div>
-    <input type="text" placeholder="$0" oninput="calcularSubtotalCot(${id})" onblur="formatearPrecioCot(${id})" class="price-cot-${id}" style="text-align:right">
-    <div class="subtotal-display" id="sub-cot-${id}">$0</div>
-    <button class="btn-delete-row" onclick="eliminarFilaCot(${id})">✕</button>
-  `;
-  body.appendChild(row);
-  calcularTotales();
+  const id = Date.now() + Math.random().toString(36).slice(2, 5);
+  productos.push({ id, qty: '', desc: '', unitario: '', photo: null });
+  renderProductos();
+  // focus en la última fila
+  setTimeout(() => {
+    const last = document.querySelector(`[data-pid="${id}"] input`);
+    if (last) last.focus();
+  }, 50);
 }
 
-function eliminarFilaCot(id) {
-  const row = document.getElementById('fila-' + id);
-  if (row) row.remove();
-  filas = filas.filter(f => f !== id);
+function eliminarProducto(id) {
+  productos = productos.filter(p => p.id !== id);
+  renderProductos();
   calcularTotales();
 }
 
 function updateProducto(id, campo, valor) {
-  // Compatibilidad — no se usa en el nuevo sistema
-}
-
-function actualizarSubtotalFila(id) {
-  // no se usa en nuevo sistema
-}
-
-function calcularSubtotalCot(id) {
-  const qty = parseFloat(document.querySelector('.qty-cot-' + id)?.value) || 0;
-  const price = parseMonto(document.querySelector('.price-cot-' + id)?.value || '');
-  const sub = qty * price;
-  const el = document.getElementById('sub-cot-' + id);
-  if (el) el.textContent = formatPesos(sub);
+  const p = productos.find(p => p.id === id);
+  if (!p) return;
+  p[campo] = valor;
+  // Recalcular el subtotal de esta fila
+  actualizarSubtotalFila(id);
   calcularTotales();
-}
-
-function formatearPrecioCot(id) {
-  const el = document.querySelector('.price-cot-' + id);
-  if (!el) return;
-  const val = parseMonto(el.value);
-  if (val > 0) el.value = formatPesos(val);
-  calcularSubtotalCot(id);
-}
-
-// Foto por fila
-let fotosPorFila = {}; // {id: dataUrl}
-let fotoTargetFila = null;
-
-function abrirFotoCot(id) {
-  fotoTargetFila = id;
-  document.getElementById('photoInput').click();
-}
-
-function updateProducto(id, campo, valor) {
 }
 
 function subtotalProducto(p) {
@@ -162,23 +106,75 @@ function subtotalProducto(p) {
   return qty * u;
 }
 
-function actualizarSubtotalFila(id) { /* no usado */ }
+function actualizarSubtotalFila(id) {
+  const p = productos.find(p => p.id === id);
+  if (!p) return;
+  const sub = subtotalProducto(p);
+  const el = document.querySelector(`[data-pid="${id}"] .subtotal-display, [data-pid="${id}"] .card-totals-value`);
+  if (el) el.textContent = formatPesos(sub);
+}
 
 /* ---------- LAYOUT SWITCH ---------- */
 function cambiarLayout(nuevo) {
+  layout = nuevo;
+  document.getElementById('btnLista').classList.toggle('active', nuevo === 'lista');
+  document.getElementById('btnGaleria').classList.toggle('active', nuevo === 'galeria');
+  document.getElementById('layoutLista').style.display = nuevo === 'lista' ? '' : 'none';
+  document.getElementById('layoutGaleria').style.display = nuevo === 'galeria' ? '' : 'none';
   renderProductos();
 }
 
 /* ---------- RENDER ---------- */
 function renderProductos() {
-  renderLista();
+  if (layout === 'lista') renderLista();
+  else renderGaleria();
 }
 
-// renderLista manejada por agregarProducto
+function renderLista() {
+  const body = document.getElementById('productosBody');
+  body.innerHTML = '';
+  productos.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'producto-row';
+    row.dataset.pid = p.id;
+    row.innerHTML = `
+      <input type="number" placeholder="1" min="1" value="${escapeAttr(p.qty)}" oninput="updateProducto('${p.id}', 'qty', this.value)">
+      ${photoSlotHTML(p.id, p.photo)}
+      <input type="text" placeholder="Cama Montaña 140x190 — color rosa palo" value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
+      <input type="text" placeholder="$0" value="${escapeAttr(p.unitario)}" oninput="updateProducto('${p.id}', 'unitario', this.value)" onblur="formatearPrecioInput(this, '${p.id}')" style="text-align:right">
+      <div class="subtotal-display">${formatPesos(subtotalProducto(p))}</div>
+      <button class="btn-delete-row" onclick="eliminarProducto('${p.id}')" title="Eliminar">✕</button>
+    `;
+    body.appendChild(row);
+    attachPhotoListeners(row, p.id);
+  });
+}
 
-function abrirFoto(pid) {
-  photoTargetId = pid;
-  document.getElementById('photoInput').click();
+function renderGaleria() {
+  const grid = document.getElementById('productosGrid');
+  grid.innerHTML = '';
+  productos.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'producto-card';
+    card.dataset.pid = p.id;
+    card.innerHTML = `
+      <button class="btn-delete-card" onclick="eliminarProducto('${p.id}')" title="Eliminar">✕</button>
+      <div class="card-photo-wrap">${photoSlotHTML(p.id, p.photo, true)}</div>
+      <div class="card-body">
+        <input type="text" class="desc-input" placeholder="Cama Montaña 140x190 — rosa palo" value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
+        <div class="card-row-2">
+          <input type="number" placeholder="Cant." min="1" value="${escapeAttr(p.qty)}" oninput="updateProducto('${p.id}', 'qty', this.value)">
+          <input type="text" placeholder="$ Vr. Unitario" value="${escapeAttr(p.unitario)}" oninput="updateProducto('${p.id}', 'unitario', this.value)" onblur="formatearPrecioInput(this, '${p.id}')" style="text-align:right">
+        </div>
+        <div class="card-totals">
+          <span class="card-totals-label">Subtotal</span>
+          <span class="card-totals-value">${formatPesos(subtotalProducto(p))}</span>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+    attachPhotoListeners(card, p.id);
+  });
 }
 
 function escapeAttr(v) {
@@ -253,12 +249,12 @@ function cargarFotoEnProducto(pid, file) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      fotosPorFila[pid] = dataUrl;
-      const txt = document.getElementById('fototxt-' + pid);
-      const btn = document.getElementById('fotobtn-' + pid);
-      if (txt) txt.textContent = '✓ Foto';
-      if (btn) btn.style.borderColor = '#C49A3C';
-      mostrarToast('✓ Foto agregada');
+      const p = productos.find(p => p.id === pid);
+      if (p) {
+        p.photo = dataUrl;
+        renderProductos();
+        mostrarToast('✓ Foto agregada');
+      }
     };
     img.src = e.target.result;
   };
@@ -266,11 +262,11 @@ function cargarFotoEnProducto(pid, file) {
 }
 
 function quitarFoto(pid) {
-  delete fotosPorFila[pid];
-  const txt = document.getElementById('fototxt-' + pid);
-  const btn = document.getElementById('fotobtn-' + pid);
-  if (txt) txt.textContent = '+ Foto';
-  if (btn) btn.style.borderColor = '#D4C9B8';
+  const p = productos.find(p => p.id === pid);
+  if (p) {
+    p.photo = null;
+    renderProductos();
+  }
 }
 
 function formatearPrecioInput(input, pid) {
@@ -283,12 +279,7 @@ function formatearPrecioInput(input, pid) {
 
 /* ---------- TOTALES ---------- */
 function calcularTotales() {
-  let total = 0;
-  filas.forEach(id => {
-    const qty = parseFloat(document.querySelector('.qty-cot-' + id)?.value) || 0;
-    const price = parseMonto(document.querySelector('.price-cot-' + id)?.value || '');
-    total += qty * price;
-  });
+  const total = productos.reduce((acc, p) => acc + subtotalProducto(p), 0);
   document.getElementById('totalGeneral').textContent = formatPesos(total);
   document.getElementById('sonLetras').textContent = total > 0 ? totalEnLetras(total) : '—';
 }
@@ -449,10 +440,9 @@ async function generarPDFBlob() {
   y += 9;
 
   // ====== PRODUCTOS ======
-  const _prods = getProductos();
   const minRowH = 26;
-  for (let i = 0; i < _prods.length; i++) {
-    const p = _prods[i];
+  for (let i = 0; i < productos.length; i++) {
+    const p = productos[i];
 
     // Calcular altura de fila según descripción
     doc.setFontSize(9);
@@ -539,7 +529,7 @@ async function generarPDFBlob() {
   // Borde general tabla
   doc.setDrawColor(28, 26, 23);
   doc.setLineWidth(0.4);
-  doc.rect(margin, y - minRowH * _prods.length - 9, contentW, minRowH * _prods.length + 9);
+  doc.rect(margin, y - minRowH * productos.length - 9, contentW, minRowH * productos.length + 9);
 
   y += 6;
 
@@ -744,30 +734,23 @@ Quedamos atentos a su confirmación.
     if (res.ok) {
       // Guardar en Supabase
       try {
+        const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
         await fetch(`${SUPA_URL}/rest/v1/cotizaciones`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPA_KEY,
-            'Authorization': 'Bearer ' + SUPA_KEY,
-            'Prefer': 'return=minimal'
-          },
+          headers: { 'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal' },
           body: JSON.stringify({
             numero_cotizacion: d.numero,
-            cliente: d.nombre || '',
-            telefono: d.tel || '',
-            fecha_cotizacion: d.fecha || new Date().toISOString().split('T')[0],
-            fecha_vencimiento: d.fechaVencimiento || null,
-            tiempo_entrega: d.tiempoEntrega || '',
-            vendedor: d.vendedor || '',
-            productos: getProductos(),
-            valor_total: parseMonto(d.total),
-            pdf_url: pdfLink || '',
-            enviado_whatsapp: true,
-            notas: d.son || ''
+            cliente: d.nombre||'', telefono: d.tel||'',
+            fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
+            fecha_vencimiento: d.fechaVencimiento||null,
+            tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
+            productos: productos.filter(p=>p.desc||p.qty).map(p=>({qty:p.qty,desc:p.desc,unitario:p.unitario,sub:formatPesos(subtotalProducto(p))})),
+            valor_total: productos.reduce((acc,p)=>acc+subtotalProducto(p),0),
+            pdf_url: pdfLink||'', enviado_whatsapp: true
           })
         });
-      } catch(e) { console.warn('No se pudo guardar en Supabase:', e); }
+      } catch(e) { console.warn('Supabase error:', e); }
       mostrarToast(pdfLink ? '✓ Cotización enviada con PDF' : '✓ Mensaje enviado');
     } else {
       throw new Error('WAHA error');
@@ -805,10 +788,7 @@ function nuevaCotizacion() {
   document.getElementById('clienteCorreo').value = '';
   document.getElementById('mensajeCliente').value = '';
 
-  filas = [];
-  filaCounter = 1;
-  fotosPorFila = {};
-  document.getElementById('productosBody').innerHTML = '';
+  productos = [];
   agregarProducto(); agregarProducto();
   calcularTotales();
   actualizarVencimiento();
@@ -818,98 +798,94 @@ function nuevaCotizacion() {
 
 
 /* =========================================================
-   HISTORIAL DE COTIZACIONES
+   PESTAÑAS + HISTORIAL
    ========================================================= */
-let todasLasCotizaciones = [];
+const _SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
+const _SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
+let _cotizaciones = [];
 
-async function cargarHistorialCotizaciones() {
+function cambiarTabCot(tab) {
+  const btnNueva = document.getElementById('tabBtnCot');
+  const btnHist = document.getElementById('tabBtnHist');
+  const tabNueva = document.getElementById('tabCotNueva');
+  const tabHist = document.getElementById('tabCotHistorial');
+  if (!btnNueva) return;
+  if (tab === 'historial') {
+    tabNueva.style.display='none'; tabHist.style.display='block';
+    btnNueva.style.color='#9E9488'; btnNueva.style.borderBottomColor='transparent';
+    btnHist.style.color='#C49A3C'; btnHist.style.borderBottomColor='#C49A3C';
+    cargarHistorialCot();
+  } else {
+    tabNueva.style.display='block'; tabHist.style.display='none';
+    btnNueva.style.color='#C49A3C'; btnNueva.style.borderBottomColor='#C49A3C';
+    btnHist.style.color='#9E9488'; btnHist.style.borderBottomColor='transparent';
+  }
+}
+
+async function cargarHistorialCot() {
   const lista = document.getElementById('historialCotLista');
   if (!lista) return;
-  lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⏳ Cargando...</div>';
+  lista.innerHTML = '<div style="text-align:center;padding:40px;color:#9E9488">⏳ Cargando...</div>';
   try {
-    const res = await fetch(`${SUPA_URL}/rest/v1/cotizaciones?select=*&order=created_at.desc&limit=100`, {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+    const res = await fetch(`${_SUPA_URL}/rest/v1/cotizaciones?select=*&order=created_at.desc&limit=100`, {
+      headers: { 'apikey': _SUPA_KEY, 'Authorization': 'Bearer ' + _SUPA_KEY }
     });
-    if (!res.ok) throw new Error('Error');
-    const data = await res.json();
-    todasLasCotizaciones = data;
-    renderCotizaciones(data);
+    _cotizaciones = await res.json();
+    renderHistCot(_cotizaciones);
   } catch(e) {
-    lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray)">⚠️ No se pudo cargar el historial</div>';
+    lista.innerHTML = '<div style="text-align:center;padding:40px;color:#9E9488">⚠️ Error al cargar</div>';
   }
 }
 
 function filtrarCotizaciones() {
-  const q = (document.getElementById('historialCotBuscar')?.value || '').toLowerCase().trim();
-  if (!q) { renderCotizaciones(todasLasCotizaciones); return; }
-  renderCotizaciones(todasLasCotizaciones.filter(c =>
-    (c.cliente||'').toLowerCase().includes(q) ||
-    (c.numero_cotizacion||'').toLowerCase().includes(q) ||
-    (c.telefono||'').includes(q) ||
-    (c.vendedor||'').toLowerCase().includes(q)
-  ));
+  const q = (document.getElementById('historialCotBuscar')?.value||'').toLowerCase();
+  renderHistCot(q ? _cotizaciones.filter(c=>(c.cliente||'').toLowerCase().includes(q)||(c.numero_cotizacion||'').toLowerCase().includes(q)||(c.vendedor||'').toLowerCase().includes(q)) : _cotizaciones);
 }
 
-function formatCOPH(n) { if(!n&&n!==0)return'—'; return'$'+Number(n).toLocaleString('es-CO'); }
-function formatFechaH(f) { if(!f)return'—'; return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); }
-
-function renderCotizaciones(lista) {
+function renderHistCot(lista) {
   const el = document.getElementById('historialCotLista');
   if (!el) return;
-  if (!lista || lista.length === 0) {
-    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray)"><div style="font-size:48px;margin-bottom:12px">🗂</div><p>No hay cotizaciones guardadas</p></div>';
-    return;
-  }
-  el.innerHTML = lista.map(c => `
-    <div style="background:var(--white);border-radius:14px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);cursor:pointer;transition:all 0.2s" onclick="verDetalleCot('${c.id}')" onmouseover="this.style.borderColor='#C49A3C'" onmouseout="this.style.borderColor='#D4C9B8'">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--cream);border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
-          <div style="font-size:12px;color:var(--warm-gray)">${formatFechaH(c.fecha_cotizacion||c.created_at)}</div>
-        </div>
-        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">
-          ${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}
-        </span>
+  if (!lista||lista.length===0) { el.innerHTML='<div style="text-align:center;padding:60px;color:#9E9488"><div style="font-size:48px">🗂</div><p>No hay cotizaciones</p></div>'; return; }
+  const fH = f => { if(!f)return'—'; return new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}); };
+  el.innerHTML = lista.map(c=>`
+    <div style="background:#FDFCF9;border-radius:14px;border:1px solid #D4C9B8;margin-bottom:12px;overflow:hidden;cursor:pointer" onclick="verDetCot('${c.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#F5F0E8;border-bottom:1px solid #D4C9B8">
+        <div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
+        <div style="font-size:12px;color:#9E9488">${fH(c.fecha_cotizacion)}</div></div>
+        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
       </div>
       <div style="padding:14px 18px">
-        <div style="font-size:16px;font-weight:600;color:var(--dark);margin-bottom:6px">👤 ${c.cliente||'Sin nombre'}</div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px;color:var(--warm-gray)">
-          ${c.telefono?`<span>📞 ${c.telefono}</span>`:''}
-          ${c.vendedor?`<span>🧑 ${c.vendedor}</span>`:''}
-          ${c.fecha_vencimiento?`<span>📅 Vence: ${formatFechaH(c.fecha_vencimiento)}</span>`:''}
+        <div style="font-size:16px;font-weight:600;margin-bottom:6px">👤 ${c.cliente||'Sin nombre'}</div>
+        <div style="display:flex;gap:16px;font-size:13px;color:#9E9488">
+          ${c.telefono?`<span>📞 ${c.telefono}</span>`:''}${c.vendedor?`<span>🧑 ${c.vendedor}</span>`:''}
         </div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:16px">
-          <div><div style="font-size:10px;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700">${formatCOPH(c.valor_total)}</div></div>
-          ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:6px;background:var(--gold);color:var(--dark);padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;margin-left:auto;align-self:center">📄 PDF</a>`:''}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #D4C9B8;display:flex;align-items:center">
+          <div><div style="font-size:10px;color:#9E9488;text-transform:uppercase;letter-spacing:1px">Total</div>
+          <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
+          ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="margin-left:auto;background:#C49A3C;color:#1C1A17;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">📄 PDF</a>`:''}
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
-function verDetalleCot(id) {
-  const c = todasLasCotizaciones.find(x => x.id === id);
+function verDetCot(id) {
+  const c = _cotizaciones.find(x=>x.id===id);
   if (!c) return;
-  const overlay = document.getElementById('detalleCotOverlay');
-  const titulo = document.getElementById('detalleCotTitulo');
-  const contenido = document.getElementById('detalleCotContenido');
-  if (!overlay) return;
-  titulo.textContent = `Cotización ${c.numero_cotizacion||'—'}`;
-  let productosHTML = '';
-  if (c.productos && c.productos.length > 0) {
-    productosHTML = `<div style="background:var(--cream);border-radius:10px;padding:14px;margin-bottom:16px">${c.productos.map(p=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:14px"><span>${p.qty||1}x ${p.desc||'—'}</span><span style="font-weight:600;color:var(--brown)">${p.sub||'—'}</span></div>`).join('')}</div>`;
+  const o = document.getElementById('detalleCotOverlay');
+  const t = document.getElementById('detalleCotTitulo');
+  const cn = document.getElementById('detalleCotContenido');
+  if (!o) return;
+  t.textContent = `Cotización ${c.numero_cotizacion||'—'}`;
+  let ph = '';
+  if (c.productos&&c.productos.length>0) {
+    ph = `<div style="background:#F5F0E8;border-radius:10px;padding:14px;margin-bottom:16px">${c.productos.map(p=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #D4C9B8;font-size:14px"><span>${p.qty||1}x ${p.desc||'—'}</span><span style="font-weight:600;color:#6B4F35">${p.sub||'—'}</span></div>`).join('')}</div>`;
   }
-  contenido.innerHTML = `
-    ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">📄 Ver PDF de la cotización</a>`:''}
+  cn.innerHTML = `${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#C49A3C;color:#1C1A17;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">📄 Ver PDF</a>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Cliente</div><div style="font-size:15px;font-weight:500">${c.cliente||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Teléfono</div><div style="font-size:15px;font-weight:500">${c.telefono||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Vendedor</div><div style="font-size:15px;font-weight:500">${c.vendedor||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Fecha</div><div style="font-size:15px;font-weight:500">${formatFechaH(c.fecha_cotizacion)}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Vence</div><div style="font-size:15px;font-weight:500">${formatFechaH(c.fecha_vencimiento)}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:var(--warm-gray);letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--green)">${formatCOPH(c.valor_total)}</div></div>
-    </div>
-    ${productosHTML}
-  `;
-  overlay.classList.add('show');
+      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Cliente</div><div style="font-size:15px">${c.cliente||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Teléfono</div><div style="font-size:15px">${c.telefono||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Vendedor</div><div style="font-size:15px">${c.vendedor||'—'}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#27634A">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
+    </div>${ph}`;
+  o.style.display='flex';
 }
