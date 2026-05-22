@@ -70,11 +70,12 @@
   /* ============ PRODUCTOS — LISTA SIMPLE ============ */
   .productos-header {
     display: grid;
-    grid-template-columns: 90px 1fr 44px;
-    gap: 12px;
-    padding: 14px 16px;
+    grid-template-columns: 80px 1fr 44px;
+    gap: 8px;
+    padding: 10px 12px;
     background: var(--dark);
     border-radius: 10px 10px 0 0;
+    margin-bottom: 0;
   }
   .productos-header span {
     font-size: 11px;
@@ -91,13 +92,12 @@
   }
   .producto-row {
     display: grid;
-    grid-template-columns: 90px 1fr 44px;
-    gap: 12px;
-    padding: 12px 16px;
+    grid-template-columns: 80px 1fr 44px;
+    gap: 8px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--border);
     align-items: center;
     transition: background 0.15s;
-    animation: fadeInUp 0.3s var(--ease-smooth) both;
   }
   .producto-row:last-child { border-bottom: none; }
   .producto-row:hover { background: var(--cream); }
@@ -105,25 +105,13 @@
     background: transparent;
     border: 1px solid transparent;
     border-radius: 6px;
-    padding: 10px 10px;
+    padding: 10px 8px;
     font-size: 15px;
   }
   .producto-row input:focus {
     background: var(--white);
     border-color: var(--gold);
     box-shadow: 0 0 0 2px rgba(196,154,60,0.15);
-  }
-  .qty-input {
-    text-align: center;
-    font-weight: 700;
-    color: var(--brown);
-    font-size: 17px !important;
-    font-family: 'Playfair Display', serif !important;
-  }
-  .qty-input::placeholder {
-    color: var(--warm-gray-2);
-    font-weight: 400;
-    opacity: 0.5;
   }
 
   /* ============ NOTA ============ */
@@ -288,15 +276,13 @@
   <div class="card">
     <div class="card-title">Muebles Entregados <span class="badge" id="contadorBadge">0 items</span></div>
     <div class="productos-header">
-      <span style="text-align:center">Cant.</span>
+      <span>Cant.</span>
       <span>Descripción del mueble</span>
       <span></span>
     </div>
     <div class="productos-body" id="productosBody"></div>
-    <button class="btn-add-row" onclick="agregarFila()">
-      <span class="plus">＋</span>
-      Agregar mueble entregado
-    </button>
+    <button class="btn-add-row" onclick="agregarFila()">＋ Agregar mueble entregado</button>
+    <input type="file" id="fotoItemInput" accept="image/*" style="display:none">
   </div>
 
   <!-- OBSERVACIONES -->

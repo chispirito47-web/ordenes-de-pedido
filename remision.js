@@ -58,51 +58,50 @@ function formatNumRem(n) {
   return 'REM-' + String(n).padStart(4, '0');
 }
 
-/* ---------- PRODUCTOS ---------- */
+/* ---------- MUEBLES — igual que orden.html ---------- */
+let filaCounter = 1;
+let filas = [];
+let fotosPorFila = {};
+let fotoTargetFila = null;
+
 function agregarFila() {
-  const id = Date.now() + Math.random().toString(36).slice(2, 5);
-  items.push({ id, qty: '', desc: '' });
-  renderItems();
-  setTimeout(() => {
-    const el = document.querySelector(`[data-iid="${id}"] input.qty-input`);
-    if (el) el.focus();
-  }, 50);
-}
-
-function eliminarFila(id) {
-  items = items.filter(i => i.id !== id);
-  renderItems();
-}
-
-function updateItem(id, campo, valor) {
-  const it = items.find(i => i.id === id);
-  if (!it) return;
-  it[campo] = valor;
-  actualizarContador();
-}
-
-function renderItems() {
+  const id = filaCounter++;
+  filas.push(id);
   const body = document.getElementById('productosBody');
-  body.innerHTML = '';
-  items.forEach(it => {
-    const row = document.createElement('div');
-    row.className = 'producto-row';
-    row.dataset.iid = it.id;
-    row.innerHTML = `
-      <input type="number" class="qty-input" min="1" placeholder="1" value="${escapeAttr(it.qty)}" oninput="updateItem('${it.id}', 'qty', this.value)">
-      <input type="text" placeholder="Ej: Sillas barra Montaña — color negro" value="${escapeAttr(it.desc)}" oninput="updateItem('${it.id}', 'desc', this.value)">
-      <button class="btn-delete-row" onclick="eliminarFila('${it.id}')" title="Eliminar">✕</button>
-    `;
-    body.appendChild(row);
-  });
-  actualizarContador();
+  const row = document.createElement('div');
+  row.className = 'producto-row';
+  row.id = 'fila-' + id;
+  row.innerHTML = `
+    <input type="number" placeholder="1" min="1" value="1" class="qty-rem-${id}">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <input type="text" placeholder="Ej: Cama Montaña 140x190 — color negro" class="desc-rem-${id}">
+      <div onclick="abrirFotoRem(${id})" id="fotobtn-rem-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span id="fototxt-rem-${id}">+ Foto mueble</span>
+      </div>
+    </div>
+    <button class="btn-delete-row" onclick="eliminarFilaRem(${id})" title="Eliminar">✕</button>
+  `;
+  body.appendChild(row);
+}
+
+function eliminarFilaRem(id) {
+  const row = document.getElementById('fila-' + id);
+  if (row) row.remove();
+  filas = filas.filter(f => f !== id);
+  delete fotosPorFila[id];
+}
+
+function updateItem(id, campo, valor) { /* compatibilidad */ }
+
+function abrirFotoRem(id) {
+  fotoTargetFila = id;
+  document.getElementById('fotoItemInput').click();
 }
 
 function actualizarContador() {
-  const total = items.filter(i => i.qty || i.desc).length;
-  const cantTotal = items.reduce((acc, i) => acc + (parseInt(i.qty) || 0), 0);
   const badge = document.getElementById('contadorBadge');
-  if (badge) badge.textContent = cantTotal > 0 ? `${cantTotal} ${cantTotal === 1 ? 'unidad' : 'unidades'}` : `${total} items`;
+  if (badge) badge.textContent = `${filas.length} items`;
 }
 
 function escapeAttr(v) {
@@ -304,7 +303,11 @@ async function generarPDFBlob() {
   y += 10;
 
   // Filas
-  const itemsValidos = items.filter(i => i.qty || i.desc);
+  const itemsValidos = filas.map(id => ({
+    qty: document.querySelector('.qty-rem-' + id)?.value || '1',
+    desc: document.querySelector('.desc-rem-' + id)?.value || '',
+    photo: fotosPorFila[id] || null
+  })).filter(i => i.desc);
   const minRows = 6;
   const totalRows = Math.max(itemsValidos.length, minRows);
   const rowH = 11;
@@ -499,9 +502,10 @@ async function enviarWA() {
 
     mostrarToast('⏳ Enviando por WhatsApp...');
     const chatId = numero + '@c.us';
-    const itemsTxt = items
-      .filter(i => i.qty || i.desc)
-      .map(i => `• ${i.qty || 1}x ${i.desc}`)
+    const itemsTxt = filas
+      .map(id => ({ qty: document.querySelector('.qty-rem-' + id)?.value || '1', desc: document.querySelector('.desc-rem-' + id)?.value || '' }))
+      .filter(i => i.desc)
+      .map(i => `• ${i.qty}x ${i.desc}`)
       .join('\n');
 
     const mensaje = `🛋️ *CASA DAMS — Remisión ${d.numero}*
@@ -536,7 +540,7 @@ ${pdfLink ? `\n📄 ${pdfLink}` : ''}
             ciudad: d2.ciudad || '',
             fecha_entrega: d2.fecha || new Date().toISOString().split('T')[0],
             vendedor: d2.vendedor || '',
-            items: items.filter(i => i.qty || i.desc),
+            items: filas.map(id => ({ qty: document.querySelector('.qty-rem-' + id)?.value || '1', desc: document.querySelector('.desc-rem-' + id)?.value || '' })).filter(i => i.desc),
             observaciones: d2.observaciones || '',
             foto_url: fotoEntregaDataUrl ? 'local' : '',
             pdf_url: pdfLink || '',

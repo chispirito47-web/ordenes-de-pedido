@@ -20,9 +20,8 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('numeroCotizacion').value = formatNumCotizacion(num);
   document.getElementById('displayNumero').textContent = formatNumCotizacion(num);
 
-  // 2 productos iniciales para empezar a llenar
-  agregarProducto();
-  agregarProducto();
+  // 3 filas iniciales
+  agregarProducto(); agregarProducto(); agregarProducto();
 
   // Vencimiento inicial
   actualizarVencimiento();
@@ -51,10 +50,19 @@ window.addEventListener('DOMContentLoaded', () => {
   // Photo input handler
   document.getElementById('photoInput').addEventListener('change', e => {
     const file = e.target.files[0];
-    if (file && photoTargetId !== null) {
-      cargarFotoEnProducto(photoTargetId, file);
+    if (file && fotoTargetFila !== null) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        fotosPorFila[fotoTargetFila] = ev.target.result;
+        const btn = document.getElementById('fotobtn-' + fotoTargetFila);
+        const txt = document.getElementById('fototxt-' + fotoTargetFila);
+        if (btn) btn.style.borderColor = '#C49A3C';
+        if (txt) txt.textContent = '✓ Foto';
+      };
+      reader.readAsDataURL(file);
     }
     e.target.value = '';
+    fotoTargetFila = null;
   });
 
   // Modal close
@@ -76,31 +84,76 @@ function actualizarVencimiento() {
   document.getElementById('fechaVencimiento').textContent = formatDate(venc);
 }
 
-/* ---------- PRODUCTOS — DATOS ---------- */
+/* ---------- PRODUCTOS — igual que orden.html + foto ---------- */
+let filaCounter = 1;
+let filas = [];
+
 function agregarProducto() {
-  const id = Date.now() + Math.random().toString(36).slice(2, 5);
-  productos.push({ id, qty: '', desc: '', unitario: '', photo: null });
-  renderProductos();
-  // focus en la última fila
-  setTimeout(() => {
-    const last = document.querySelector(`[data-pid="${id}"] input`);
-    if (last) last.focus();
-  }, 50);
+  const id = filaCounter++;
+  filas.push(id);
+  const body = document.getElementById('productosBody');
+  const row = document.createElement('div');
+  row.className = 'producto-row';
+  row.id = 'fila-' + id;
+  row.innerHTML = `
+    <input type="number" placeholder="1" min="1" oninput="calcularSubtotalCot(${id})" class="qty-cot-${id}" value="1">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <input type="text" placeholder="Descripción del mueble..." class="desc-cot-${id}">
+      <div onclick="abrirFotoCot(${id})" id="fotobtn-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content;background:transparent">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span id="fototxt-${id}">+ Foto</span>
+      </div>
+    </div>
+    <input type="text" placeholder="$0" oninput="calcularSubtotalCot(${id})" onblur="formatearPrecioCot(${id})" class="price-cot-${id}" style="text-align:right">
+    <div class="subtotal-display" id="sub-cot-${id}">$0</div>
+    <button class="btn-delete-row" onclick="eliminarFilaCot(${id})">✕</button>
+  `;
+  body.appendChild(row);
+  calcularTotales();
 }
 
-function eliminarProducto(id) {
-  productos = productos.filter(p => p.id !== id);
-  renderProductos();
+function eliminarFilaCot(id) {
+  const row = document.getElementById('fila-' + id);
+  if (row) row.remove();
+  filas = filas.filter(f => f !== id);
   calcularTotales();
 }
 
 function updateProducto(id, campo, valor) {
-  const p = productos.find(p => p.id === id);
-  if (!p) return;
-  p[campo] = valor;
-  // Recalcular el subtotal de esta fila
-  actualizarSubtotalFila(id);
+  // Compatibilidad — no se usa en el nuevo sistema
+}
+
+function actualizarSubtotalFila(id) {
+  // no se usa en nuevo sistema
+}
+
+function calcularSubtotalCot(id) {
+  const qty = parseFloat(document.querySelector('.qty-cot-' + id)?.value) || 0;
+  const price = parseMonto(document.querySelector('.price-cot-' + id)?.value || '');
+  const sub = qty * price;
+  const el = document.getElementById('sub-cot-' + id);
+  if (el) el.textContent = formatPesos(sub);
   calcularTotales();
+}
+
+function formatearPrecioCot(id) {
+  const el = document.querySelector('.price-cot-' + id);
+  if (!el) return;
+  const val = parseMonto(el.value);
+  if (val > 0) el.value = formatPesos(val);
+  calcularSubtotalCot(id);
+}
+
+// Foto por fila
+let fotosPorFila = {}; // {id: dataUrl}
+let fotoTargetFila = null;
+
+function abrirFotoCot(id) {
+  fotoTargetFila = id;
+  document.getElementById('photoInput').click();
+}
+
+function updateProducto(id, campo, valor) {
 }
 
 function subtotalProducto(p) {
@@ -119,11 +172,6 @@ function actualizarSubtotalFila(id) {
 
 /* ---------- LAYOUT SWITCH ---------- */
 function cambiarLayout(nuevo) {
-  layout = nuevo;
-  document.getElementById('btnLista').classList.toggle('active', nuevo === 'lista');
-  document.getElementById('btnGaleria').classList.toggle('active', nuevo === 'galeria');
-  document.getElementById('layoutLista').style.display = nuevo === 'lista' ? '' : 'none';
-  document.getElementById('layoutGaleria').style.display = nuevo === 'galeria' ? '' : 'none';
   renderProductos();
 }
 
@@ -778,7 +826,10 @@ function nuevaCotizacion() {
   document.getElementById('clienteCorreo').value = '';
   document.getElementById('mensajeCliente').value = '';
 
-  productos = [];
+  filas = [];
+  filaCounter = 1;
+  fotosPorFila = {};
+  document.getElementById('productosBody').innerHTML = '';
   agregarProducto(); agregarProducto();
   calcularTotales();
   actualizarVencimiento();
