@@ -162,13 +162,7 @@ function subtotalProducto(p) {
   return qty * u;
 }
 
-function actualizarSubtotalFila(id) {
-  const p = productos.find(p => p.id === id);
-  if (!p) return;
-  const sub = subtotalProducto(p);
-  const el = document.getElementById('sub-' + id) || document.querySelector(`[data-pid="${id}"] .subtotal-display`);
-  if (el) el.textContent = formatPesos(sub);
-}
+function actualizarSubtotalFila(id) { /* no usado */ }
 
 /* ---------- LAYOUT SWITCH ---------- */
 function cambiarLayout(nuevo) {
@@ -180,28 +174,7 @@ function renderProductos() {
   renderLista();
 }
 
-function renderLista() {
-  const body = document.getElementById('productosBody');
-  body.innerHTML = '';
-  productos.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'producto-row';
-    row.dataset.pid = p.id;
-    row.innerHTML = `
-      <input type="number" placeholder="1" min="1" value="${escapeAttr(p.qty)}" oninput="updateProducto('${p.id}', 'qty', this.value)">
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <input type="text" placeholder="Descripción del mueble..." value="${escapeAttr(p.desc)}" oninput="updateProducto('${p.id}', 'desc', this.value)">
-        <div class="foto-mini" data-pid="${p.id}" onclick="abrirFoto('${p.id}')" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border:1px dashed var(--border);border-radius:6px;font-size:11px;color:var(--warm-gray);width:fit-content">
-          ${p.photo ? `<img src="${p.photo}" style="width:28px;height:28px;object-fit:cover;border-radius:4px"> <span>Ver foto</span>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> <span>+ Foto</span>`}
-        </div>
-      </div>
-      <input type="text" placeholder="$0" value="${escapeAttr(p.unitario)}" oninput="updateProducto('${p.id}', 'unitario', this.value)" onblur="formatearPrecioInput(this, '${p.id}')" style="text-align:right">
-      <div class="subtotal-display" id="sub-${p.id}">${formatPesos(subtotalProducto(p))}</div>
-      <button class="btn-delete-row" onclick="eliminarProducto('${p.id}')" title="Eliminar">✕</button>
-    `;
-    body.appendChild(row);
-  });
-}
+// renderLista manejada por agregarProducto
 
 function abrirFoto(pid) {
   photoTargetId = pid;
@@ -280,12 +253,12 @@ function cargarFotoEnProducto(pid, file) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      const p = productos.find(p => p.id === pid);
-      if (p) {
-        p.photo = dataUrl;
-        renderProductos();
-        mostrarToast('✓ Foto agregada');
-      }
+      fotosPorFila[pid] = dataUrl;
+      const txt = document.getElementById('fototxt-' + pid);
+      const btn = document.getElementById('fotobtn-' + pid);
+      if (txt) txt.textContent = '✓ Foto';
+      if (btn) btn.style.borderColor = '#C49A3C';
+      mostrarToast('✓ Foto agregada');
     };
     img.src = e.target.result;
   };
@@ -293,11 +266,11 @@ function cargarFotoEnProducto(pid, file) {
 }
 
 function quitarFoto(pid) {
-  const p = productos.find(p => p.id === pid);
-  if (p) {
-    p.photo = null;
-    renderProductos();
-  }
+  delete fotosPorFila[pid];
+  const txt = document.getElementById('fototxt-' + pid);
+  const btn = document.getElementById('fotobtn-' + pid);
+  if (txt) txt.textContent = '+ Foto';
+  if (btn) btn.style.borderColor = '#D4C9B8';
 }
 
 function formatearPrecioInput(input, pid) {
@@ -310,7 +283,12 @@ function formatearPrecioInput(input, pid) {
 
 /* ---------- TOTALES ---------- */
 function calcularTotales() {
-  const total = productos.reduce((acc, p) => acc + subtotalProducto(p), 0);
+  let total = 0;
+  filas.forEach(id => {
+    const qty = parseFloat(document.querySelector('.qty-cot-' + id)?.value) || 0;
+    const price = parseMonto(document.querySelector('.price-cot-' + id)?.value || '');
+    total += qty * price;
+  });
   document.getElementById('totalGeneral').textContent = formatPesos(total);
   document.getElementById('sonLetras').textContent = total > 0 ? totalEnLetras(total) : '—';
 }
@@ -471,9 +449,10 @@ async function generarPDFBlob() {
   y += 9;
 
   // ====== PRODUCTOS ======
+  const _prods = getProductos();
   const minRowH = 26;
-  for (let i = 0; i < productos.length; i++) {
-    const p = productos[i];
+  for (let i = 0; i < _prods.length; i++) {
+    const p = _prods[i];
 
     // Calcular altura de fila según descripción
     doc.setFontSize(9);
@@ -560,7 +539,7 @@ async function generarPDFBlob() {
   // Borde general tabla
   doc.setDrawColor(28, 26, 23);
   doc.setLineWidth(0.4);
-  doc.rect(margin, y - minRowH * productos.length - 9, contentW, minRowH * productos.length + 9);
+  doc.rect(margin, y - minRowH * _prods.length - 9, contentW, minRowH * _prods.length + 9);
 
   y += 6;
 
@@ -781,7 +760,7 @@ Quedamos atentos a su confirmación.
             fecha_vencimiento: d.fechaVencimiento || null,
             tiempo_entrega: d.tiempoEntrega || '',
             vendedor: d.vendedor || '',
-            productos: productos.map(p => ({ qty: p.qty, desc: p.desc, unitario: p.unitario, sub: formatPesos(subtotalProducto(p)) })),
+            productos: getProductos(),
             valor_total: parseMonto(d.total),
             pdf_url: pdfLink || '',
             enviado_whatsapp: true,

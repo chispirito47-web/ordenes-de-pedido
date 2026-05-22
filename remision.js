@@ -143,19 +143,36 @@ async function cargarDesdeOrden() {
     if (orden.vendedor) document.getElementById('vendedor').value = orden.vendedor;
 
     // Cargar productos (sin precios)
+    filas = []; filaCounter = 1; fotosPorFila = {};
+    document.getElementById('productosBody').innerHTML = '';
     if (Array.isArray(orden.productos) && orden.productos.length > 0) {
-      items = orden.productos
-        .filter(p => p.qty || p.desc)
-        .map(p => ({
-          id: Date.now() + Math.random().toString(36).slice(2, 5),
-          qty: p.qty || '',
-          desc: p.desc || ''
-        }));
-      if (items.length === 0) {
+      const productosOrden = orden.productos.filter(p => p.qty || p.desc);
+      if (productosOrden.length === 0) {
         agregarFila();
       } else {
-        renderItems();
+        productosOrden.forEach(p => {
+          const id = filaCounter++;
+          filas.push(id);
+          const body = document.getElementById('productosBody');
+          const row = document.createElement('div');
+          row.className = 'producto-row';
+          row.id = 'fila-' + id;
+          row.innerHTML = `
+            <input type="number" placeholder="1" min="1" value="${p.qty || 1}" class="qty-rem-${id}">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <input type="text" placeholder="Descripción..." value="${p.desc || ''}" class="desc-rem-${id}">
+              <div onclick="abrirFotoRem(${id})" id="fotobtn-rem-${id}" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border:1px dashed #D4C9B8;border-radius:6px;font-size:11px;color:#9E9488;width:fit-content">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span id="fototxt-rem-${id}">+ Foto mueble</span>
+              </div>
+            </div>
+            <button class="btn-delete-row" onclick="eliminarFilaRem(${id})">✕</button>
+          `;
+          body.appendChild(row);
+        });
       }
+    } else {
+      agregarFila();
     }
 
     // Mostrar info de referencia
@@ -581,7 +598,8 @@ function nuevaRemision() {
   document.getElementById('clienteTel').value = '';
   document.getElementById('observaciones').value = '';
 
-  items = [];
+  filas = []; filaCounter = 1; fotosPorFila = {};
+  document.getElementById('productosBody').innerHTML = '';
   agregarFila(); agregarFila();
 
   limpiarFirma('firmaComprador');
