@@ -757,10 +757,7 @@ Quedamos atentos a su confirmación.
     }
   } catch (e) {
     console.error(e);
-    mostrarToast('⚠ Abriendo WhatsApp directamente...');
-    const d = getDatos();
-    const msg = `🛋️ *CASA DAMS - Cotización ${d.numero}*\n\n👤 ${d.nombre || '—'}\n💰 Total: ${d.total}\n📅 Válida hasta: ${formatDate(d.fechaVencimiento)}\n\nGracias por su interés.`;
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+    mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
   }
 }
 

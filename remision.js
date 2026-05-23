@@ -542,10 +542,7 @@ ${pdfLink ? `\n📄 ${pdfLink}` : ''}
     }
   } catch (e) {
     console.error(e);
-    mostrarToast('⚠ Abriendo WhatsApp directamente...');
-    const d = getDatos();
-    const msg = `🛋️ *CASA DAMS - Remisión ${d.numero}*\n\n👤 ${d.nombre || '—'}\n📅 Entrega: ${formatDate(d.fecha)}\n\n¡Gracias por su compra!`;
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(msg)}`, '_blank');
+    mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
   }
 }
 

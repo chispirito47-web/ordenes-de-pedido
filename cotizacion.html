@@ -48,7 +48,7 @@
   /* ============ LAYOUT LISTA ============ */
   .productos-lista .productos-header {
     display: grid;
-    grid-template-columns: 80px 72px 1fr 140px 130px 36px;
+    grid-template-columns: 80px 1fr 140px 130px 36px;
     gap: 10px;
     padding: 12px 14px;
     background: var(--dark);
@@ -70,13 +70,12 @@
   }
   .productos-lista .producto-row {
     display: grid;
-    grid-template-columns: 80px 72px 1fr 140px 130px 36px;
+    grid-template-columns: 80px 1fr 140px 130px 36px;
     gap: 10px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     align-items: center;
     transition: background 0.15s;
-    animation: fadeInUp 0.3s var(--ease-smooth) both;
   }
   .productos-lista .producto-row:last-child { border-bottom: none; }
   .productos-lista .producto-row:hover { background: var(--cream); }
@@ -492,23 +491,13 @@
   <div class="card">
     <div class="card-title">
       Muebles cotizados
-      <div class="layout-switch" role="tablist">
-        <button id="btnLista" class="active" onclick="cambiarLayout('lista')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          <span>Lista</span>
-        </button>
-        <button id="btnGaleria" onclick="cambiarLayout('galeria')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          <span>Galería</span>
-        </button>
-      </div>
+
     </div>
 
     <!-- LISTA -->
     <div class="productos-lista" id="layoutLista">
       <div class="productos-header">
         <span>Cant.</span>
-        <span style="text-align:center">Foto</span>
         <span>Descripción</span>
         <span style="text-align:right">Vr. Unitario</span>
         <span style="text-align:right">Subtotal</span>

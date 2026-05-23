@@ -1433,9 +1433,7 @@ async function enviarWhatsApp() {
     } else { throw new Error('WAHA error'); }
   } catch(e) {
     console.error(e);
-    mostrarToast('⚠️ Error — abriendo WhatsApp...');
-    const datos = getDatos();
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(`🛋️ *CASA DAMS - Orden N° ${datos.numero}*\n\n👤 ${datos.nombre||'—'}\n💰 Total: ${datos.total}\n\n✅ Gracias por su compra.`)}`, '_blank');
+    mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
   }
 }
 
