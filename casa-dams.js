@@ -199,9 +199,11 @@ async function enviarMensajeWA(chatId, texto) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Api-Key': WAHA_KEY,
     },
-    body: JSON.stringify({ session: WAHA_SESSION, chatId, text: texto })
+    body: JSON.stringify({
+      endpoint: '/api/sendText',
+      payload: { session: WAHA_SESSION, chatId, text: texto }
+    })
   });
 }
 
