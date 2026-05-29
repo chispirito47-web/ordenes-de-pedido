@@ -618,9 +618,40 @@ async function cargarHistorialRem() {
   }
 }
 
+function limpiarFiltrosFechaRem() {
+  const d = document.getElementById('filtroRemDesde');
+  const h = document.getElementById('filtroRemHasta');
+  if (d) d.value = '';
+  if (h) h.value = '';
+  filtrarRemisiones();
+}
+
 function filtrarRemisiones() {
-  const q = (document.getElementById('historialRemBuscar')?.value||'').toLowerCase();
-  renderHistRem(q ? _remisiones.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.numero_remision||'').toLowerCase().includes(q)||(r.vendedor||'').toLowerCase().includes(q)) : _remisiones);
+  const q     = (document.getElementById('historialRemBuscar')?.value||'').toLowerCase();
+  const desde = document.getElementById('filtroRemDesde')?.value || '';
+  const hasta = document.getElementById('filtroRemHasta')?.value || '';
+
+  let resultado = _remisiones.filter(r => {
+    if (q) {
+      const match =
+        (r.cliente||'').toLowerCase().includes(q) ||
+        (r.numero_remision||'').toLowerCase().includes(q) ||
+        (r.vendedor||'').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    const fechaEnt = (r.fecha_entrega || r.created_at || '').substring(0, 10);
+    if (desde && fechaEnt < desde) return false;
+    if (hasta && fechaEnt > hasta) return false;
+    return true;
+  });
+
+  // Resumen
+  const resEl = document.getElementById('resumenRem');
+  if (resEl) resEl.textContent = resultado.length > 0
+    ? `${resultado.length} remisión${resultado.length!==1?'es':''} encontrada${resultado.length!==1?'s':''}`
+    : '';
+
+  renderHistRem(resultado);
 }
 
 function renderHistRem(lista) {
