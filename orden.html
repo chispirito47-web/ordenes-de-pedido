@@ -1442,7 +1442,6 @@ async function enviarWhatsApp() {
           subtotal: limpiarNum(datos.total),
           valor_total: limpiarNum(datos.total),
           abono: getTotalAbonos(),
-          abonos_detalle: getAbonosDetalle(),
           saldo_pendiente: limpiarNum(datos.saldo),
           pdf_url: pdfLink||'', enviado_whatsapp: true,
           notas: datos.son||''
