@@ -1342,24 +1342,49 @@ async function generarPDFBlob() {
   });
   y+=clausulaH+4;
 
-  const firmaW=contentW/2-5;
-  doc.setFillColor(240,237,230);doc.rect(margin,y,firmaW,30,'F');
-  doc.setDrawColor(212,201,184);doc.rect(margin,y,firmaW,30);
-  doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);doc.rect(margin+2,y+2,28,10,'S');
-  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
-  doc.text('ACEPTADA',margin+16,y+9,{align:'center'});
-  const firmaCompradorData=getFirmaDataURL('firmaComprador');
-  if(firmaCompradorData)doc.addImage(firmaCompradorData,'PNG',margin+2,y+12,firmaW-4,14);
-  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);
-  doc.text('FIRMA Y C.C. DEL COMPRADOR',margin+firmaW/2,y+29,{align:'center'});
+  // Salto de página si no hay espacio para las firmas (necesitan ~42mm)
+  const pageH = doc.internal.pageSize.getHeight();
+  if (y + 42 > pageH - 10) { doc.addPage(); y = 15; }
 
-  const firmaVX=margin+firmaW+10;
-  doc.setFillColor(240,237,230);doc.rect(firmaVX,y,firmaW,30,'F');
-  doc.setDrawColor(212,201,184);doc.rect(firmaVX,y,firmaW,30);
-  const firmaVendedorData=getFirmaDataURL('firmaVendedor');
-  if(firmaVendedorData)doc.addImage(firmaVendedorData,'PNG',firmaVX+2,y+6,firmaW-4,18);
-  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);
-  doc.text('FIRMA DEL VENDEDOR',firmaVX+firmaW/2,y+29,{align:'center'});
+  const firmaH = 38;
+  const firmaW = contentW/2 - 5;
+
+  // Firma comprador
+  doc.setFillColor(240,237,230);
+  doc.rect(margin, y, firmaW, firmaH, 'F');
+  doc.setDrawColor(212,201,184);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, y, firmaW, firmaH);
+  // Badge ACEPTADA
+  doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);
+  doc.rect(margin+2, y+2, 30, 10, 'S');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
+  doc.text('ACEPTADA', margin+17, y+9, {align:'center'});
+  // Imagen firma
+  const firmaCompradorData = getFirmaDataURL('firmaComprador');
+  if (firmaCompradorData) doc.addImage(firmaCompradorData,'PNG',margin+2,y+13,firmaW-4,18);
+  // Línea base firma
+  doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);
+  doc.line(margin+4, y+firmaH-6, margin+firmaW-4, y+firmaH-6);
+  // Etiqueta
+  doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+  doc.text('FIRMA Y C.C. DEL COMPRADOR', margin+firmaW/2, y+firmaH-2, {align:'center'});
+
+  // Firma vendedor
+  const firmaVX = margin + firmaW + 10;
+  doc.setFillColor(240,237,230);
+  doc.rect(firmaVX, y, firmaW, firmaH, 'F');
+  doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);
+  doc.rect(firmaVX, y, firmaW, firmaH);
+  // Imagen firma
+  const firmaVendedorData = getFirmaDataURL('firmaVendedor');
+  if (firmaVendedorData) doc.addImage(firmaVendedorData,'PNG',firmaVX+2,y+5,firmaW-4,24);
+  // Línea base firma
+  doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);
+  doc.line(firmaVX+4, y+firmaH-6, firmaVX+firmaW-4, y+firmaH-6);
+  // Etiqueta
+  doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+  doc.text('FIRMA DEL VENDEDOR', firmaVX+firmaW/2, y+firmaH-2, {align:'center'});
 
   return doc;
 }
@@ -1665,7 +1690,10 @@ async function verDetalle(id) {
   } catch(e) { console.warn('Error cargando abonos:', e); }
 
   document.getElementById('detalleContenido').innerHTML = `
-    ${o.pdf_url?`<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px;">📄 Ver PDF de la orden</a>`:''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+      ${o.pdf_url?`<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">📄 Ver PDF orden</a>`:''}
+      <button onclick="verUltimoComprobante('${o.id}')" style="display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:var(--gold);border:2px solid var(--gold);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;">🧾 Ver comprobante</button>
+    </div>
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
       <div class="detalle-field"><span class="det-label">Teléfono</span><span class="det-val">${o.telefono||'—'}</span></div>
@@ -1775,10 +1803,10 @@ async function generarComprobanteAbono(o, monto, medio, nuevoAbono, nuevoSaldo) 
   doc.setLineWidth(0.4);
   doc.rect(margin, y-3, W - margin*2, 26);
 
-  drawFila('Abono:', formatCOP(monto) + ' (' + medio + ')', true);
-  drawFila('Total abonado:', formatCOP(nuevoAbono));
-
   const totalOrden = o.valor_total || 0;
+  const saldoAnterior = (o.abono || 0);  // abono antes de este pago
+  drawFila('Saldo anterior:', formatCOP(Math.max(totalOrden - saldoAnterior, 0)));
+  drawFila('Abono:', formatCOP(monto) + ' (' + medio + ')', true);
   const saldoReal = Math.max(nuevoSaldo, 0);
   drawFila('Saldo pendiente:', formatCOP(saldoReal));
 
@@ -1891,6 +1919,22 @@ ${estadoPago}${comprobanteLink ? '\n\n📄 Comprobante: ' + comprobanteLink : ''
 }
 
 function cerrarDetalle() { document.getElementById('detalleOverlay').classList.remove('show'); }
+
+async function verUltimoComprobante(pedidoId) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/abonos?pedido_id=eq.${pedidoId}&order=created_at.desc&limit=1`, {
+      headers: {'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
+    });
+    const abonos = await res.json();
+    if (Array.isArray(abonos) && abonos.length > 0 && abonos[0].comprobante_url) {
+      window.open(abonos[0].comprobante_url, '_blank');
+    } else {
+      mostrarToast('⚠️ Esta orden aún no tiene comprobante de abono');
+    }
+  } catch(e) {
+    mostrarToast('⚠️ Error al cargar el comprobante');
+  }
+}
 document.getElementById('detalleOverlay').addEventListener('click',function(e){if(e.target===this)cerrarDetalle();});
 </script>
 </body>

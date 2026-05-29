@@ -5,10 +5,17 @@
 let items = []; // [{id, qty, desc}]
 
 /* ---------- INIT ---------- */
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('fechaEntrega').value = today();
 
-  const num = getContador('remision_num', 1);
+  let num = getContador('remision_num', 1);
+  try {
+    const rn = await fetch(`${SUPA_URL}/rest/v1/consecutivos?clave=eq.remision&select=valor`, {
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    });
+    const rows = await rn.json();
+    if (Array.isArray(rows) && rows.length > 0) num = rows[0].valor;
+  } catch(e) { console.warn('Consecutivo offline, usando local'); }
   document.getElementById('numeroRemision').value = formatNumRem(num);
   document.getElementById('displayNumero').textContent = formatNumRem(num);
 
@@ -547,12 +554,19 @@ ${pdfLink ? `\n📄 ${pdfLink}` : ''}
 }
 
 /* ---------- NUEVA ---------- */
-function nuevaRemision() {
+async function nuevaRemision() {
   if (!confirm('¿Crear nueva remisión? Se perderán los datos actuales.')) return;
 
   const current = parseInt(document.getElementById('numeroRemision').value.replace(/\D/g, '')) || 1;
   const next = current + 1;
   setContador('remision_num', next);
+  try {
+    await fetch(`${SUPA_URL}/rest/v1/consecutivos?clave=eq.remision`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'},
+      body: JSON.stringify({ valor: next })
+    });
+  } catch(e) { console.warn('Error actualizando consecutivo remoto'); }
 
   document.getElementById('numeroRemision').value = formatNumRem(next);
   document.getElementById('displayNumero').textContent = formatNumRem(next);
@@ -618,40 +632,9 @@ async function cargarHistorialRem() {
   }
 }
 
-function limpiarFiltrosFechaRem() {
-  const d = document.getElementById('filtroRemDesde');
-  const h = document.getElementById('filtroRemHasta');
-  if (d) d.value = '';
-  if (h) h.value = '';
-  filtrarRemisiones();
-}
-
 function filtrarRemisiones() {
-  const q     = (document.getElementById('historialRemBuscar')?.value||'').toLowerCase();
-  const desde = document.getElementById('filtroRemDesde')?.value || '';
-  const hasta = document.getElementById('filtroRemHasta')?.value || '';
-
-  let resultado = _remisiones.filter(r => {
-    if (q) {
-      const match =
-        (r.cliente||'').toLowerCase().includes(q) ||
-        (r.numero_remision||'').toLowerCase().includes(q) ||
-        (r.vendedor||'').toLowerCase().includes(q);
-      if (!match) return false;
-    }
-    const fechaEnt = (r.fecha_entrega || r.created_at || '').substring(0, 10);
-    if (desde && fechaEnt < desde) return false;
-    if (hasta && fechaEnt > hasta) return false;
-    return true;
-  });
-
-  // Resumen
-  const resEl = document.getElementById('resumenRem');
-  if (resEl) resEl.textContent = resultado.length > 0
-    ? `${resultado.length} remisión${resultado.length!==1?'es':''} encontrada${resultado.length!==1?'s':''}`
-    : '';
-
-  renderHistRem(resultado);
+  const q = (document.getElementById('historialRemBuscar')?.value||'').toLowerCase();
+  renderHistRem(q ? _remisiones.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.numero_remision||'').toLowerCase().includes(q)||(r.vendedor||'').toLowerCase().includes(q)) : _remisiones);
 }
 
 function renderHistRem(lista) {

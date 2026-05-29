@@ -8,12 +8,19 @@ let formasPago = new Set();
 let photoTargetId = null; // ID del producto al que asignar foto
 
 /* ---------- INIT ---------- */
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   // Fecha hoy
   document.getElementById('fechaCotizacion').value = today();
 
-  // Número consecutivo
-  const num = getContador('cotizacion_num', 1);
+  // Número consecutivo desde Supabase
+  let num = getContador('cotizacion_num', 1);
+  try {
+    const rn = await fetch(`${SUPA_URL}/rest/v1/consecutivos?clave=eq.cotizacion&select=valor`, {
+      headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    });
+    const rows = await rn.json();
+    if (Array.isArray(rows) && rows.length > 0) num = rows[0].valor;
+  } catch(e) { console.warn('Consecutivo offline, usando local'); }
   document.getElementById('numeroCotizacion').value = formatNumCotizacion(num);
   document.getElementById('displayNumero').textContent = formatNumCotizacion(num);
 
@@ -764,12 +771,20 @@ Quedamos atentos a su confirmación.
 /* =========================================================
    NUEVA / RESET
    ========================================================= */
-function nuevaCotizacion() {
+async function nuevaCotizacion() {
   if (!confirm('¿Crear nueva cotización? Se perderán los datos actuales.')) return;
 
   const currentNum = parseInt(document.getElementById('numeroCotizacion').value.replace(/\D/g, '')) || 1;
   const next = currentNum + 1;
   setContador('cotizacion_num', next);
+  // Actualizar consecutivo en Supabase
+  try {
+    await fetch(`${SUPA_URL}/rest/v1/consecutivos?clave=eq.cotizacion`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'},
+      body: JSON.stringify({ valor: next })
+    });
+  } catch(e) { console.warn('Error actualizando consecutivo remoto'); }
 
   document.getElementById('numeroCotizacion').value = formatNumCotizacion(next);
   document.getElementById('displayNumero').textContent = formatNumCotizacion(next);
