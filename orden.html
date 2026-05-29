@@ -1426,8 +1426,8 @@ async function enviarWhatsApp() {
 
     if (res.ok) {
       mostrarToast('⏳ Guardando orden...');
-      const limpiarNum = v => parseFloat((v||'0').toString().replace(/[^0-9.-]/g,''))||0;
-      await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
+      const limpiarNum = v => parseMonto(v || '0');
+      const resSupabase = await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
         body: JSON.stringify({
@@ -1448,7 +1448,13 @@ async function enviarWhatsApp() {
           notas: datos.son||''
         })
       });
-      mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
+      if (!resSupabase.ok) {
+        const errTxt = await resSupabase.text();
+        console.error('Supabase error:', resSupabase.status, errTxt);
+        mostrarToast('✅ WA enviado · ⚠️ Error al guardar en historial');
+      } else {
+        mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
+      }
     } else { throw new Error('WAHA error'); }
   } catch(e) {
     console.error(e);
