@@ -1857,9 +1857,7 @@ Hola *${o.cliente||'cliente'}*, se ha registrado un abono a tu orden N° *${o.nu
 
 💵 *Abono registrado:* ${formatCOP(monto)} (${medio})
 💰 *Total abonado:* ${formatCOP(nuevoAbono)}
-${estadoPago}${comprobanteLink?'
-
-📄 Comprobante: '+comprobanteLink:''}
+${estadoPago}${comprobanteLink ? '\n\n📄 Comprobante: ' + comprobanteLink : ''}
 
 ✅ Gracias por tu pago.
 📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería
