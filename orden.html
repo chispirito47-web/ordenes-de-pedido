@@ -1407,7 +1407,12 @@ async function enviarWhatsApp() {
 
     if (res.ok) {
       mostrarToast('⏳ Guardando orden...');
-      const limpiarNum = v => parseFloat((v||'0').toString().replace(/[^0-9.-]/g,''))||0;
+      const limpiarNum = v => {
+        const s = (v||'0').toString().replace(/\s/g,'');
+        // Eliminar símbolo $ y separadores de miles colombianos (puntos antes de 3 dígitos al final)
+        const limpio = s.replace(/\$/g,'').replace(/\./g,'').replace(/,/g,'.');
+        return parseFloat(limpio) || 0;
+      };
       await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
@@ -1641,7 +1646,10 @@ async function registrarAbono(ordenId) {
   const telefono=(o.telefono||'').replace(/\D/g,'');
   if(telefono){
     const chatId=(telefono.startsWith('57')?telefono:'57'+telefono)+'@c.us';
-    const estadoPago=nuevoSaldo<=0?'🎉 *¡Tu orden está completamente pagada!*':`📋 *Saldo pendiente:* ${formatCOP(nuevoSaldo)}`;
+    const totalOrden = o.valor_total || 0;
+    const estadoPago = (totalOrden > 0 && nuevoSaldo <= 0)
+      ? '🎉 *¡Tu orden está completamente pagada!*'
+      : `📋 *Saldo pendiente:* ${formatCOP(Math.max(nuevoSaldo, 0))}`;
     const mensaje=`🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${o.cliente||'cliente'}*, se ha registrado un abono a tu orden N° *${o.numero_orden||o.op}*:\n\n💵 *Abono registrado:* ${formatCOP(monto)} (${medio})\n💰 *Total abonado:* ${formatCOP(nuevoAbono)}\n${estadoPago}\n\n✅ Gracias por tu pago.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
     await fetch('/api/waha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendText',payload:{session:'default',chatId,text:mensaje}})});
   }
