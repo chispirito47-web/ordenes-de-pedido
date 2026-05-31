@@ -1937,7 +1937,7 @@ async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
     const canvasList = [];
     for (let i = 1; i <= totalPages; i++) {
       const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 2.5 }); // alta calidad
+      const viewport = page.getViewport({ scale: 4 }); // zoom mayor = se ve más cerca
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
