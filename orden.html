@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Casa Dams — Orden de Pedido</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1694,6 +1695,7 @@ async function verDetalle(id) {
   document.getElementById('detalleContenido').innerHTML = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
       ${o.pdf_url?`<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">📄 Ver PDF orden</a>`:''}
+      ${o.pdf_url?`<button onclick="descargarOrdenPNG('${o.pdf_url}','${(o.numero_orden||o.op||'orden')}','${(o.cliente||'cliente').replace(/'/g,'')}') " style="display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:var(--gold);border:1.5px solid var(--gold);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🖼 Descargar imagen</button>`:''}
     </div>
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
@@ -1920,6 +1922,51 @@ ${estadoPago}${comprobanteLink ? '\n\n📄 Comprobante: ' + comprobanteLink : ''
 }
 
 function cerrarDetalle() { document.getElementById('detalleOverlay').classList.remove('show'); }
+
+async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
+  try {
+    mostrarToast('⏳ Generando imagen...');
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages;
+
+    // Renderizar cada página
+    const canvasList = [];
+    for (let i = 1; i <= totalPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.5 }); // alta calidad
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      canvasList.push(canvas);
+    }
+
+    // Unir todas las páginas verticalmente en un solo canvas
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = canvasList[0].width;
+    finalCanvas.height = canvasList.reduce((sum, c) => sum + c.height, 0);
+    const ctx = finalCanvas.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+    let offsetY = 0;
+    canvasList.forEach(c => { ctx.drawImage(c, 0, offsetY); offsetY += c.height; });
+
+    // Descargar
+    const nombreLimpio = (cliente || 'cliente').replace(/\s+/g, '-').substring(0, 30);
+    const link = document.createElement('a');
+    link.download = `OrdenCasaDams-${numeroOrden}-${nombreLimpio}.png`;
+    link.href = finalCanvas.toDataURL('image/png');
+    link.click();
+    mostrarToast('✅ Imagen descargada');
+  } catch(e) {
+    console.error(e);
+    mostrarToast('⚠️ Error al generar imagen');
+  }
+}
 
 async function verUltimoComprobante(pedidoId) {
   try {
