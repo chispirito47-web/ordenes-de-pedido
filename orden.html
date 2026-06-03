@@ -1346,45 +1346,61 @@ async function generarPDFBlob() {
   y+=8;
 
   const rowMinH=8;
-  const filasAPintar=Math.max(productos.length,8);
+  // Mínimo 8 filas visibles pero siempre mostramos todas las reales
+  const filasAPintar=Math.max(productos.length, 8);
+  const tablaStartY = y; // para el borde exterior
+
   for(let i=0;i<filasAPintar;i++){
     const p=productos[i]||{};
-    // Calcular líneas de descripción
     const descText = p.desc||'';
-    const descLines = descText ? doc.splitTextToSize(descText, colWidths[1]-4) : [''];
-    const rowH = Math.max(rowMinH, descLines.length * 4.5 + 3.5);
+    const descLines = descText ? doc.splitTextToSize(descText, colWidths[1]-4) : [];
+    const rowH = Math.max(rowMinH, descLines.length > 0 ? descLines.length * 4.5 + 3.5 : rowMinH);
 
-    // Verificar si hay espacio en la página; si no, agregar nueva página
-    const pageH2 = doc.internal.pageSize.getHeight();
-    if (y + rowH > pageH2 - 10) { doc.addPage(); y = 15; }
+    // Salto de página si no hay espacio — re-dibujar header en nueva página
+    const pageHCheck = doc.internal.pageSize.getHeight();
+    if (y + rowH > pageHCheck - 10) {
+      // Cerrar borde de tabla en página anterior
+      doc.setDrawColor(212,201,184); doc.setLineWidth(0.4);
+      doc.rect(margin, tablaStartY - 8, contentW, y - tablaStartY + 8);
+      doc.addPage();
+      y = 15;
+      // Re-dibujar header de tabla en nueva página
+      doc.setFillColor(28,26,23); doc.rect(margin,y,contentW,8,'F');
+      doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+      colHeaders.forEach((h,ci)=>{ doc.text(h,colX[ci]+colWidths[ci]/2,y+5.5,{align:'center'}); });
+      y+=8;
+    }
 
-    const bg=i%2===0?[253,252,249]:[245,240,232];
+    const bg = i%2===0 ? [253,252,249] : [245,240,232];
     doc.setFillColor(...bg); doc.rect(margin,y,contentW,rowH,'F');
-    doc.setDrawColor(212,201,184); doc.setLineWidth(0.2); doc.line(margin,y+rowH,margin+contentW,y+rowH);
-    colX.forEach((cx,ci)=>{ if(ci>0)doc.line(cx,y,cx,y+rowH); });
+    doc.setDrawColor(212,201,184); doc.setLineWidth(0.2);
+    doc.line(margin,y+rowH,margin+contentW,y+rowH);
+    colX.forEach((cx,ci)=>{ if(ci>0) doc.line(cx,y,cx,y+rowH); });
+
     if(p.qty||p.desc){
-      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);
-      // Cantidad
-      doc.text(String(p.qty),colX[0]+colWidths[0]/2,y+rowH/2+1.5,{align:'center'});
-      // Descripción multi-línea
-      doc.setFontSize(8.5);
-      doc.text(descLines,colX[1]+2,y+4.5);
-      // Referencia
-      doc.setFontSize(8);
-      doc.setTextColor(107,79,53);
-      if(p.ref) doc.text(String(p.ref),colX[2]+colWidths[2]/2,y+rowH/2+1.5,{align:'center'});
-      // Precio
-      doc.setTextColor(28,26,23);
-      doc.setFontSize(9);
-      doc.text(p.price||'',colX[3]+colWidths[3]-2,y+rowH/2+1.5,{align:'right'});
-      // Subtotal
+      doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(28,26,23);
+      doc.text(String(p.qty), colX[0]+colWidths[0]/2, y+rowH/2+1.5, {align:'center'});
+      if(descLines.length>0){ doc.setFontSize(8.5); doc.text(descLines, colX[1]+2, y+4.5); }
+      doc.setFontSize(8); doc.setTextColor(107,79,53);
+      if(p.ref) doc.text(String(p.ref), colX[2]+colWidths[2]/2, y+rowH/2+1.5, {align:'center'});
+      doc.setTextColor(28,26,23); doc.setFontSize(9);
+      doc.text(p.price||'', colX[3]+colWidths[3]-2, y+rowH/2+1.5, {align:'right'});
       doc.setFont('helvetica','bold');
-      doc.text(p.sub,colX[4]+colWidths[4]-2,y+rowH/2+1.5,{align:'right'});
+      doc.text(p.sub, colX[4]+colWidths[4]-2, y+rowH/2+1.5, {align:'right'});
     }
     y+=rowH;
   }
-  doc.setDrawColor(212,201,184);doc.setLineWidth(0.4);doc.rect(margin,y-filasAPintar*rowMinH-8,contentW,y-(y-filasAPintar*rowMinH-8));
+
+  // Borde exterior de toda la tabla
+  doc.setDrawColor(212,201,184); doc.setLineWidth(0.4);
+  doc.rect(margin, tablaStartY-8, contentW, y - tablaStartY + 8);
   y+=4;
+
+  // ---- TOTALES Y CLÁUSULAS: siempre con salto de página si no caben ----
+  // Calcular espacio necesario para totales (44mm) + cláusulas (~40mm) + firmas (52mm)
+  const espacioNecesario = 44 + 50 + 52;
+  const pageHFinal = doc.internal.pageSize.getHeight();
+  if (y + espacioNecesario > pageHFinal - 10) { doc.addPage(); y = 15; }
 
   doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text('SON:',margin+2,y+4);
