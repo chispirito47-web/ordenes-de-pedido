@@ -199,7 +199,7 @@
   /* TABLA DE PRODUCTOS */
   .productos-header {
     display: grid;
-    grid-template-columns: 80px 1fr 140px 140px 44px;
+    grid-template-columns: 70px 1fr 110px 120px 120px 44px;
     gap: 8px;
     padding: 10px 12px;
     background: var(--dark);
@@ -224,7 +224,7 @@
 
   .producto-row {
     display: grid;
-    grid-template-columns: 80px 1fr 140px 140px 44px;
+    grid-template-columns: 70px 1fr 110px 120px 120px 44px;
     gap: 8px;
     padding: 8px 12px;
     border-bottom: 1px solid var(--border);
@@ -630,8 +630,8 @@
   }
 
   @media (max-width: 600px) {
-    .productos-header { grid-template-columns: 60px 1fr 110px 110px 36px; }
-    .producto-row { grid-template-columns: 60px 1fr 110px 110px 36px; }
+    .productos-header { grid-template-columns: 50px 1fr 80px 90px 90px 32px; font-size:10px; }
+    .producto-row { grid-template-columns: 50px 1fr 80px 90px 90px 32px; }
     .firma-container { grid-template-columns: 1fr; }
     .header { padding: 14px 16px; }
     .header-brand .logo { font-size: 20px; }
@@ -691,8 +691,51 @@
   .historial-empty { text-align: center; padding: 60px 20px; color: var(--warm-gray); }
   .historial-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
   .historial-empty p { font-size: 15px; }
-  .historial-loading { text-align: center; padding: 40px; color: var(--warm-gray); font-size: 15px; }
-</style>
+  /* MODAL EDITAR ORDEN */
+  .edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 600;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+  .edit-overlay.show { display: flex; }
+  .edit-modal {
+    background: var(--white);
+    border-radius: 24px 24px 0 0;
+    width: 100%;
+    max-width: 780px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+  }
+  .edit-modal .card-title { font-size: 14px; }
+  .edit-prod-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 90px 110px 110px 36px;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .edit-prod-row input {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--dark);
+    width: 100%;
+  }
+  .edit-prod-row input:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
 </head>
 <body>
 
@@ -730,7 +773,7 @@
     <div class="form-row cols-3">
       <div class="field">
         <label>N° de Orden</label>
-        <input type="number" id="numeroOrden" placeholder="4022" oninput="document.getElementById('displayNumero').textContent = this.value || '—'">
+        <input type="text" id="numeroOrden" placeholder="ORD/001" readonly style="background:var(--dark);color:var(--gold);font-family:'Playfair Display',serif;font-weight:700;font-size:17px;letter-spacing:1px;cursor:default;">
       </div>
       <div class="field">
         <label>Fecha de Factura</label>
@@ -808,6 +851,7 @@
     <div class="productos-header">
       <span>Cant.</span>
       <span>Descripción</span>
+      <span>Referencia</span>
       <span style="text-align:right">Vr. Unitario</span>
       <span style="text-align:right">Subtotal</span>
       <span></span>
@@ -948,6 +992,17 @@
   </div>
 </div>
 
+<!-- MODAL EDITAR ORDEN -->
+<div class="edit-overlay" id="editOverlay">
+  <div class="edit-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;color:var(--gold);font-weight:700;" id="editTitulo">Editar Orden</div>
+      <button onclick="cerrarEditar()" style="background:var(--cream);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;color:var(--dark);">✕ Cerrar</button>
+    </div>
+    <div id="editContenido"></div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -968,24 +1023,47 @@ const WAHA_SESSION = 'default';
 // ========================
 // INIT
 // ========================
-window.onload = () => {
+function formatNumOrden(n) {
+  return 'ORD/' + String(n).padStart(3, '0');
+}
+
+let numeroOrdenActual = 1; // valor numérico actual (para incrementar al guardar)
+
+window.onload = async () => {
   const hoy = new Date().toISOString().split('T')[0];
   document.getElementById('fechaFactura').value = hoy;
 
-  fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=numero_orden&order=created_at.desc&limit=1`, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  }).then(r => r.json()).then(data => {
-    let siguiente = 4023;
-    if (data && data.length > 0 && data[0].numero_orden) {
-      const ultimo = parseInt(data[0].numero_orden);
-      if (!isNaN(ultimo)) siguiente = ultimo + 1;
+  // Leer consecutivo desde Supabase (tabla consecutivos, clave 'orden')
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0 && data[0].valor) {
+      numeroOrdenActual = data[0].valor + 1;
+    } else {
+      // Fila no existe aún — fallback: buscar el último número en pedidos
+      const r2 = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=numero_orden&order=created_at.desc&limit=50`, {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+      });
+      const pedidos = await r2.json();
+      let maxNum = 0;
+      if (Array.isArray(pedidos)) {
+        pedidos.forEach(p => {
+          const raw = String(p.numero_orden || '').replace(/[^0-9]/g, '');
+          const n = parseInt(raw);
+          if (!isNaN(n) && n > maxNum) maxNum = n;
+        });
+      }
+      numeroOrdenActual = maxNum > 0 ? maxNum + 1 : 1;
     }
-    document.getElementById('numeroOrden').value = siguiente;
-    document.getElementById('displayNumero').textContent = siguiente;
-  }).catch(() => {
-    document.getElementById('numeroOrden').value = 4023;
-    document.getElementById('displayNumero').textContent = '4023';
-  });
+  } catch(e) {
+    numeroOrdenActual = 1;
+  }
+
+  const formatted = formatNumOrden(numeroOrdenActual);
+  document.getElementById('numeroOrden').value = formatted;
+  document.getElementById('displayNumero').textContent = formatted;
 
   agregarFila(); agregarFila(); agregarFila();
   initFirma('firmaComprador');
@@ -1006,6 +1084,7 @@ function agregarFila() {
   row.innerHTML = `
     <input type="number" placeholder="1" min="1" oninput="calcularSubtotal(${id})" onblur="calcularSubtotal(${id})" class="qty-${id}">
     <input type="text" placeholder="Descripción del producto..." class="desc-${id}">
+    <input type="text" placeholder="Ref..." class="ref-${id}" style="font-size:13px;">
     <input type="text" placeholder="$0" oninput="calcularSubtotal(${id})" onblur="formatearPrecio(${id})" class="price-${id}" style="text-align:right">
     <div class="subtotal-display" id="sub-${id}">$0</div>
     <button class="btn-delete-row" onclick="eliminarFila(${id})">✕</button>
@@ -1213,9 +1292,10 @@ function getProductos() {
     const inputs = row.querySelectorAll('input');
     const qty = inputs[0]?.value || '';
     const desc = inputs[1]?.value || '';
-    const price = inputs[2]?.value || '';
+    const ref = inputs[2]?.value || '';
+    const price = inputs[3]?.value || '';
     const sub = row.querySelector('.subtotal-display')?.textContent || '$0';
-    if (qty || desc) productos.push({ qty, desc, price, sub });
+    if (qty || desc) productos.push({ qty, desc, ref, price, sub });
   });
   return productos;
 }
@@ -1270,31 +1350,53 @@ async function generarPDFBlob() {
   drawField('TEL.',datos.tel,margin+contentW*0.35,y,contentW*0.25);
   drawField('CORREO',datos.correo,margin+contentW*0.65,y,contentW*0.35); y+=16;
 
-  const colWidths=[18,contentW-18-38-38,38,38];
-  const colX=[margin,margin+18,margin+18+colWidths[1],margin+18+colWidths[1]+38];
-  const colHeaders=['CANT.','DESCRIPCIÓN','VR. UNITARIO','SUBTOTAL'];
+  const colWidths=[18,contentW-18-32-38-38,32,38,38];
+  const colX=[margin,margin+18,margin+18+colWidths[1],margin+18+colWidths[1]+32,margin+18+colWidths[1]+32+38];
+  const colHeaders=['CANT.','DESCRIPCIÓN','REF.','VR. UNITARIO','SUBTOTAL'];
   doc.setFillColor(28,26,23); doc.rect(margin,y,contentW,8,'F');
   doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
   colHeaders.forEach((h,i)=>{ doc.text(h,colX[i]+colWidths[i]/2,y+5.5,{align:'center'}); });
   y+=8;
 
-  const rowH=8, filasAPintar=Math.max(productos.length,8);
+  const rowMinH=8;
+  const filasAPintar=Math.max(productos.length,8);
   for(let i=0;i<filasAPintar;i++){
     const p=productos[i]||{};
+    // Calcular líneas de descripción
+    const descText = p.desc||'';
+    const descLines = descText ? doc.splitTextToSize(descText, colWidths[1]-4) : [''];
+    const rowH = Math.max(rowMinH, descLines.length * 4.5 + 3.5);
+
+    // Verificar si hay espacio en la página; si no, agregar nueva página
+    const pageH2 = doc.internal.pageSize.getHeight();
+    if (y + rowH > pageH2 - 10) { doc.addPage(); y = 15; }
+
     const bg=i%2===0?[253,252,249]:[245,240,232];
     doc.setFillColor(...bg); doc.rect(margin,y,contentW,rowH,'F');
     doc.setDrawColor(212,201,184); doc.setLineWidth(0.2); doc.line(margin,y+rowH,margin+contentW,y+rowH);
     colX.forEach((cx,ci)=>{ if(ci>0)doc.line(cx,y,cx,y+rowH); });
     if(p.qty||p.desc){
       doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);
-      doc.text(String(p.qty),colX[0]+colWidths[0]/2,y+5.5,{align:'center'});
-      doc.text((p.desc||'').substring(0,50),colX[1]+2,y+5.5);
-      doc.text(p.price||'',colX[2]+colWidths[2]-2,y+5.5,{align:'right'});
-      doc.setFont('helvetica','bold');doc.text(p.sub,colX[3]+colWidths[3]-2,y+5.5,{align:'right'});
+      // Cantidad
+      doc.text(String(p.qty),colX[0]+colWidths[0]/2,y+rowH/2+1.5,{align:'center'});
+      // Descripción multi-línea
+      doc.setFontSize(8.5);
+      doc.text(descLines,colX[1]+2,y+4.5);
+      // Referencia
+      doc.setFontSize(8);
+      doc.setTextColor(107,79,53);
+      if(p.ref) doc.text(String(p.ref),colX[2]+colWidths[2]/2,y+rowH/2+1.5,{align:'center'});
+      // Precio
+      doc.setTextColor(28,26,23);
+      doc.setFontSize(9);
+      doc.text(p.price||'',colX[3]+colWidths[3]-2,y+rowH/2+1.5,{align:'right'});
+      // Subtotal
+      doc.setFont('helvetica','bold');
+      doc.text(p.sub,colX[4]+colWidths[4]-2,y+rowH/2+1.5,{align:'right'});
     }
     y+=rowH;
   }
-  doc.setDrawColor(212,201,184);doc.setLineWidth(0.4);doc.rect(margin,y-filasAPintar*rowH-8,contentW,filasAPintar*rowH+8);
+  doc.setDrawColor(212,201,184);doc.setLineWidth(0.4);doc.rect(margin,y-filasAPintar*rowMinH-8,contentW,y-(y-filasAPintar*rowMinH-8));
   y+=4;
 
   doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
@@ -1431,7 +1533,7 @@ async function enviarWhatsApp() {
     const chatId = numero + '@c.us';
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
-    const fileName = `OrdenPedido_CasaDams_${datos.numero}_${Date.now()}.pdf`;
+    const fileName = `OrdenPedido_CasaDams_${datos.numero.replace('/','_')}_${Date.now()}.pdf`;
 
     mostrarToast('⏳ Subiendo PDF...');
     const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`, {
@@ -1478,6 +1580,8 @@ async function enviarWhatsApp() {
         console.error('Supabase error:', resSupabase.status, errTxt);
         mostrarToast('✅ WA enviado · ⚠️ Error al guardar en historial');
       } else {
+        // Incrementar consecutivo en Supabase
+        await incrementarConsecutivoOrden();
         mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
       }
     } else { throw new Error('WAHA error'); }
@@ -1487,19 +1591,48 @@ async function enviarWhatsApp() {
   }
 }
 
+async function incrementarConsecutivoOrden() {
+  try {
+    // Intentar PATCH (actualizar si existe)
+    const resPatch = await fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden`, {
+      method: 'PATCH',
+      headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify({ valor: numeroOrdenActual })
+    });
+    if (!resPatch.ok) {
+      // Si no existe, hacer INSERT (upsert manual)
+      await fetch(`${SUPABASE_URL}/rest/v1/consecutivos`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates' },
+        body: JSON.stringify({ clave: 'orden', valor: numeroOrdenActual })
+      });
+    }
+  } catch(e) { console.warn('No se pudo actualizar consecutivo orden:', e); }
+}
+
 // ========================
 // UTILS
 // ========================
 function limpiarTodo() {
   if (!confirm('¿Crear nueva orden? Se perderán los datos actuales.')) return;
-  fetch(`${SUPABASE_URL}/rest/v1/pedidos?select=numero_orden&order=created_at.desc&limit=1`, {
+  // Leer consecutivo actualizado desde Supabase
+  fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
     headers: { 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY }
   }).then(r=>r.json()).then(data=>{
-    let siguiente=4023;
-    if(data&&data.length>0&&data[0].numero_orden){ const u=parseInt(data[0].numero_orden); if(!isNaN(u))siguiente=u+1; }
-    document.getElementById('numeroOrden').value=siguiente;
-    document.getElementById('displayNumero').textContent=siguiente;
-  }).catch(()=>{ const a=parseInt(document.getElementById('numeroOrden').value||4022); document.getElementById('numeroOrden').value=a+1; document.getElementById('displayNumero').textContent=a+1; });
+    if(Array.isArray(data)&&data.length>0&&data[0].valor){
+      numeroOrdenActual = data[0].valor + 1;
+    } else {
+      numeroOrdenActual = numeroOrdenActual + 1;
+    }
+    const formatted = formatNumOrden(numeroOrdenActual);
+    document.getElementById('numeroOrden').value = formatted;
+    document.getElementById('displayNumero').textContent = formatted;
+  }).catch(()=>{
+    numeroOrdenActual = numeroOrdenActual + 1;
+    const formatted = formatNumOrden(numeroOrdenActual);
+    document.getElementById('numeroOrden').value = formatted;
+    document.getElementById('displayNumero').textContent = formatted;
+  });
   document.getElementById('fechaFactura').value=new Date().toISOString().split('T')[0];
   document.getElementById('fechaVencimiento').value='';
   document.getElementById('formaPago').value='';
@@ -1696,6 +1829,7 @@ async function verDetalle(id) {
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
       ${o.pdf_url?`<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">📄 Ver PDF orden</a>`:''}
       ${o.pdf_url?`<button onclick="descargarOrdenPNG('${o.pdf_url}','${(o.numero_orden||o.op||'orden')}','${(o.cliente||'cliente').replace(/'/g,'')}') " style="display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:var(--gold);border:1.5px solid var(--gold);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🖼 Descargar imagen</button>`:''}
+      <button onclick="cerrarDetalle();abrirEditar('${o.id}')" style="display:inline-flex;align-items:center;gap:8px;background:var(--brown);color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">✏️ Editar orden</button>
     </div>
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
@@ -1983,7 +2117,450 @@ async function verUltimoComprobante(pedidoId) {
     mostrarToast('⚠️ Error al cargar el comprobante');
   }
 }
-document.getElementById('detalleOverlay').addEventListener('click',function(e){if(e.target===this)cerrarDetalle();});
+// ========================
+// EDITAR ORDEN DESDE HISTORIAL
+// ========================
+let editandoOrdenId = null;
+let editFilas = [];
+let editFilaCounter = 100;
+
+function abrirEditar(id) {
+  const o = todasLasOrdenes.find(x => x.id === id);
+  if (!o) return;
+  editandoOrdenId = id;
+  editFilas = [];
+  editFilaCounter = 100;
+  document.getElementById('editTitulo').textContent = `✏️ Editar Orden #${o.numero_orden || o.op || '—'}`;
+
+  const prods = (o.productos && Array.isArray(o.productos)) ? o.productos : [];
+
+  document.getElementById('editContenido').innerHTML = `
+    <!-- Info general -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Información General</div>
+      <div class="form-row cols-2" style="margin-bottom:12px;">
+        <div class="field"><label>Cliente</label><input type="text" id="eCliente" value="${(o.cliente||'').replace(/"/g,'&quot;')}"></div>
+        <div class="field"><label>Teléfono</label><input type="text" id="eTel" value="${o.telefono||''}"></div>
+      </div>
+      <div class="form-row cols-2" style="margin-bottom:12px;">
+        <div class="field"><label>C.C. / NIT</label><input type="text" id="eCC" value="${o.cedula||''}"></div>
+        <div class="field"><label>Ciudad</label><input type="text" id="eCiudad" value="${o.ciudad||''}"></div>
+      </div>
+      <div class="form-row cols-1" style="margin-bottom:12px;">
+        <div class="field"><label>Dirección</label><input type="text" id="eDireccion" value="${(o.direccion||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="field"><label>Forma de pago</label>
+          <select id="eFormaPago">
+            <option value="">Seleccionar...</option>
+            ${['Contado','Crédito','Abono','Transferencia','Efectivo'].map(v=>`<option ${o.metodo_pago===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Vendedor</label>
+          <select id="eVendedor">
+            <option value="">Seleccionar...</option>
+            ${['Ronald','Eliza','Damaris','Charid','Adriana'].map(v=>`<option ${o.vendedor===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Productos -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Productos</div>
+      <div style="display:grid;grid-template-columns:60px 1fr 90px 110px 110px 36px;gap:6px;padding:8px;background:var(--dark);border-radius:8px 8px 0 0;">
+        <span style="font-size:10px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Cant.</span>
+        <span style="font-size:10px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Descripción</span>
+        <span style="font-size:10px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;">Ref.</span>
+        <span style="font-size:10px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:right;">Vr. Unitario</span>
+        <span style="font-size:10px;color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;text-align:right;">Subtotal</span>
+        <span></span>
+      </div>
+      <div id="editProductosBody" style="border:1.5px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;"></div>
+      <button type="button" onclick="editAgregarFila()" class="btn-add-row" style="margin-top:10px;">＋ Agregar producto</button>
+
+      <div style="margin-top:14px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <div class="total-row">
+          <span class="total-label">Total</span>
+          <span class="total-value" id="editTotalDisplay">$0</span>
+        </div>
+        <div class="total-row">
+          <span class="total-label">Saldo</span>
+          <span class="total-value" id="editSaldoDisplay" style="color:var(--red)">$0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+      <button type="button" onclick="guardarEdicion()" style="flex:1;background:var(--gold);color:var(--dark);border:none;border-radius:12px;padding:16px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;cursor:pointer;">💾 Guardar cambios</button>
+      <button type="button" onclick="guardarYReenviar()" style="flex:1;background:#25D366;color:white;border:none;border-radius:12px;padding:16px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;cursor:pointer;">📲 Guardar y reenviar WhatsApp</button>
+    </div>
+    <div id="editStatus" style="margin-top:10px;font-size:13px;text-align:center;color:var(--warm-gray);min-height:20px;"></div>
+  `;
+
+  // Cargar filas de productos existentes
+  prods.forEach(p => editAgregarFila(p));
+  if (prods.length === 0) { editAgregarFila(); editAgregarFila(); }
+
+  editCalcularTotal(o.abono || 0);
+  document.getElementById('editOverlay').classList.add('show');
+}
+
+function editAgregarFila(p) {
+  const id = editFilaCounter++;
+  editFilas.push(id);
+  const body = document.getElementById('editProductosBody');
+  const row = document.createElement('div');
+  row.className = 'edit-prod-row';
+  row.id = 'efila-' + id;
+  const qty   = p ? (p.qty||'') : '';
+  const desc  = p ? (p.desc||p.descripcion||'') : '';
+  const ref   = p ? (p.ref||'') : '';
+  const price = p ? (p.price||p.unitario||'') : '';
+  row.innerHTML = `
+    <input type="number" placeholder="1" min="1" value="${qty}" oninput="editCalcSub(${id})" class="eqty-${id}">
+    <input type="text" placeholder="Descripción..." value="${desc.replace(/"/g,'&quot;')}" class="edesc-${id}">
+    <input type="text" placeholder="Ref..." value="${ref.replace(/"/g,'&quot;')}" class="eref-${id}" style="font-size:12px;">
+    <input type="text" placeholder="$0" value="${price}" oninput="editCalcSub(${id})" onblur="editFormatPrice(${id})" class="eprice-${id}" style="text-align:right;">
+    <div style="font-weight:600;color:var(--brown);font-size:13px;text-align:right;padding:7px 4px;" id="esub-${id}">$0</div>
+    <button type="button" onclick="editEliminarFila(${id})" style="width:30px;height:30px;border-radius:6px;border:none;background:#FEE2E2;color:var(--red);font-size:14px;cursor:pointer;">✕</button>
+  `;
+  body.appendChild(row);
+  if (p) editCalcSub(id, true);
+}
+
+function editEliminarFila(id) {
+  const row = document.getElementById('efila-' + id);
+  if (row) row.remove();
+  editFilas = editFilas.filter(f => f !== id);
+  const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
+  editCalcularTotal(o ? (o.abono || 0) : 0);
+}
+
+function editFormatPrice(id) {
+  const el = document.querySelector('.eprice-' + id);
+  if (!el) return;
+  const val = parseMonto(el.value);
+  if (val > 0) el.value = formatPesos(val);
+  editCalcSub(id);
+}
+
+function editCalcSub(id, silencioso) {
+  const qty = parseFloat(document.querySelector('.eqty-'+id)?.value) || 0;
+  const price = parseMonto(document.querySelector('.eprice-'+id)?.value);
+  const sub = qty * price;
+  const el = document.getElementById('esub-' + id);
+  if (el) el.textContent = formatPesos(sub);
+  if (!silencioso) {
+    const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
+    editCalcularTotal(o ? (o.abono || 0) : 0);
+  }
+}
+
+function editCalcularTotal(abonoExistente) {
+  let total = 0;
+  editFilas.forEach(id => {
+    const qty = parseFloat(document.querySelector('.eqty-'+id)?.value) || 0;
+    const price = parseMonto(document.querySelector('.eprice-'+id)?.value);
+    total += qty * price;
+  });
+  const saldo = Math.max(total - (abonoExistente || 0), 0);
+  const tEl = document.getElementById('editTotalDisplay');
+  const sEl = document.getElementById('editSaldoDisplay');
+  if (tEl) tEl.textContent = formatPesos(total);
+  if (sEl) sEl.textContent = formatPesos(saldo);
+}
+
+function getEditProductos() {
+  const productos = [];
+  editFilas.forEach(id => {
+    const qty   = document.querySelector('.eqty-'+id)?.value || '';
+    const desc  = document.querySelector('.edesc-'+id)?.value || '';
+    const ref   = document.querySelector('.eref-'+id)?.value || '';
+    const price = document.querySelector('.eprice-'+id)?.value || '';
+    const sub   = document.getElementById('esub-'+id)?.textContent || '$0';
+    if (qty || desc) productos.push({ qty, desc, ref, price, sub });
+  });
+  return productos;
+}
+
+function getEditDatos() {
+  return {
+    cliente:     document.getElementById('eCliente')?.value || '',
+    telefono:    document.getElementById('eTel')?.value || '',
+    cedula:      document.getElementById('eCC')?.value || '',
+    ciudad:      document.getElementById('eCiudad')?.value || '',
+    direccion:   document.getElementById('eDireccion')?.value || '',
+    metodo_pago: document.getElementById('eFormaPago')?.value || '',
+    vendedor:    document.getElementById('eVendedor')?.value || '',
+  };
+}
+
+async function guardarEdicion(silencioso) {
+  const status = document.getElementById('editStatus');
+  if (status) { status.textContent = '⏳ Guardando...'; status.style.color = 'var(--warm-gray)'; }
+  const datos = getEditDatos();
+  const productos = getEditProductos();
+  const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
+  if (!o) return;
+
+  const totalNum = productos.reduce((acc, p) => {
+    const qty = parseFloat(p.qty) || 0;
+    const price = parseMonto(p.price);
+    return acc + qty * price;
+  }, 0);
+  const abonoActual = o.abono || 0;
+  const nuevoSaldo = Math.max(totalNum - abonoActual, 0);
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+    body: JSON.stringify({
+      cliente:       datos.cliente,
+      telefono:      datos.telefono,
+      cedula:        datos.cedula,
+      ciudad:        datos.ciudad,
+      direccion:     datos.direccion,
+      metodo_pago:   datos.metodo_pago,
+      vendedor:      datos.vendedor,
+      productos:     productos,
+      valor_total:   totalNum,
+      saldo_pendiente: nuevoSaldo,
+    })
+  });
+
+  // Actualizar objeto local
+  Object.assign(o, { ...datos, productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo });
+
+  if (!res.ok) {
+    if (status) { status.textContent = '❌ Error al guardar'; status.style.color = 'var(--red)'; }
+    return false;
+  }
+  if (!silencioso) {
+    if (status) { status.textContent = '✅ Cambios guardados'; status.style.color = 'var(--green)'; }
+    mostrarToast('✅ Orden actualizada');
+    setTimeout(() => { cerrarEditar(); cargarHistorial(); }, 1500);
+  }
+  return true;
+}
+
+async function guardarYReenviar() {
+  const status = document.getElementById('editStatus');
+  if (status) { status.textContent = '⏳ Guardando y generando PDF...'; status.style.color = 'var(--warm-gray)'; }
+
+  const ok = await guardarEdicion(true);
+  if (!ok) return;
+
+  const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
+  if (!o) return;
+
+  // Generar PDF con datos actualizados usando generarPDFBlob reutilizado
+  // Construimos datos compatibles con getDatos/getProductos usando los del modal
+  const datosEdit = getEditDatos();
+  const prodEdit = getEditProductos();
+
+  try {
+    if (status) { status.textContent = '⏳ Generando PDF...'; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'letter' });
+    const W = 215.9, margin = 15, contentW = W - margin*2;
+    const numOrden = o.numero_orden || o.op || '—';
+
+    // Header
+    doc.setFillColor(28,26,23); doc.rect(0,0,W,38,'F');
+    doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.text('CASA DAMS',margin,14);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(158,148,136);
+    doc.text('Muebles Nacionales e Importados',margin,19);
+    doc.text('Cra. 4 N° 49-71 B/Los Laureles 2. Montería - Córdoba',margin,24);
+    doc.text('Cel. 321 540 0839  |  casadams2015@gmail.com',margin,29);
+    doc.setFillColor(196,154,60); doc.roundedRect(W-60,8,46,22,3,3,'F');
+    doc.setTextColor(28,26,23); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text('ORDEN DE PEDIDO',W-37,14,{align:'center'}); doc.setFontSize(16);
+    doc.text('N° '+numOrden,W-37,22,{align:'center'});
+
+    let y = 44;
+    // Fechas
+    doc.setDrawColor(212,201,184); doc.setLineWidth(0.3); doc.rect(margin,y,contentW,14);
+    const col = contentW/3;
+    doc.setFillColor(240,237,230); doc.rect(margin,y,contentW,6,'F');
+    const headers3=['FECHA DE FACTURA','FORMA DE PAGO','FECHA DE VENCIMIENTO'];
+    const fechaOrden = o.fecha_orden || '';
+    const fechaVenc  = o.fecha_vencimiento || '';
+    const values3=[
+      fechaOrden ? fechaOrden.split('-').reverse().join('/') : '—',
+      datosEdit.metodo_pago || '—',
+      fechaVenc  ? fechaVenc.split('-').reverse().join('/') : '—'
+    ];
+    headers3.forEach((h,i)=>{
+      const x=margin+col*i+col/2;
+      if(i>0){doc.setDrawColor(212,201,184);doc.line(margin+col*i,y,margin+col*i,y+14);}
+      doc.setTextColor(107,79,53);doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.text(h,x,y+4,{align:'center'});
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);doc.text(values3[i],x,y+11,{align:'center'});
+    });
+    y+=18;
+
+    const drawFieldE=(label,value,x,fy,w)=>{
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text(label+':',x,fy-1);
+      doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(28,26,23);doc.text(value||'—',x,fy+5);
+      doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.line(x,fy+7,x+w,fy+7);
+    };
+    drawFieldE('SEÑORES',datosEdit.cliente,margin,y,contentW); y+=12;
+    drawFieldE('DIRECCIÓN',datosEdit.direccion,margin,y,contentW*0.55);
+    drawFieldE('CIUDAD',datosEdit.ciudad,margin+contentW*0.6,y,contentW*0.4); y+=12;
+    drawFieldE('NIT/C.C.',datosEdit.cedula,margin,y,contentW*0.3);
+    drawFieldE('TEL.',datosEdit.telefono,margin+contentW*0.35,y,contentW*0.25);
+    drawFieldE('CORREO',o.correo||'',margin+contentW*0.65,y,contentW*0.35); y+=16;
+
+    // Tabla productos
+    const colWidths2=[18,contentW-18-32-38-38,32,38,38];
+    const colX2=[margin,margin+18,margin+18+colWidths2[1],margin+18+colWidths2[1]+32,margin+18+colWidths2[1]+32+38];
+    const colHeaders2=['CANT.','DESCRIPCIÓN','REF.','VR. UNITARIO','SUBTOTAL'];
+    doc.setFillColor(28,26,23); doc.rect(margin,y,contentW,8,'F');
+    doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+    colHeaders2.forEach((h,i)=>{ doc.text(h,colX2[i]+colWidths2[i]/2,y+5.5,{align:'center'}); });
+    y+=8;
+
+    const rowMinH2=8;
+    const filasAP=Math.max(prodEdit.length,8);
+    for(let i=0;i<filasAP;i++){
+      const p=prodEdit[i]||{};
+      const descLines2=p.desc?doc.splitTextToSize(p.desc,colWidths2[1]-4):[''];
+      const rowH2=Math.max(rowMinH2,descLines2.length*4.5+3.5);
+      const pageH3=doc.internal.pageSize.getHeight();
+      if(y+rowH2>pageH3-10){doc.addPage();y=15;}
+      const bg=i%2===0?[253,252,249]:[245,240,232];
+      doc.setFillColor(...bg);doc.rect(margin,y,contentW,rowH2,'F');
+      doc.setDrawColor(212,201,184);doc.setLineWidth(0.2);doc.line(margin,y+rowH2,margin+contentW,y+rowH2);
+      colX2.forEach((cx,ci)=>{if(ci>0)doc.line(cx,y,cx,y+rowH2);});
+      if(p.qty||p.desc){
+        doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);
+        doc.text(String(p.qty),colX2[0]+colWidths2[0]/2,y+rowH2/2+1.5,{align:'center'});
+        doc.setFontSize(8.5);doc.text(descLines2,colX2[1]+2,y+4.5);
+        doc.setFontSize(8);doc.setTextColor(107,79,53);
+        if(p.ref)doc.text(String(p.ref),colX2[2]+colWidths2[2]/2,y+rowH2/2+1.5,{align:'center'});
+        doc.setTextColor(28,26,23);doc.setFontSize(9);
+        doc.text(p.price||'',colX2[3]+colWidths2[3]-2,y+rowH2/2+1.5,{align:'right'});
+        doc.setFont('helvetica','bold');doc.text(p.sub,colX2[4]+colWidths2[4]-2,y+rowH2/2+1.5,{align:'right'});
+      }
+      y+=rowH2;
+    }
+    y+=4;
+
+    // Totales
+    const totalFinal = prodEdit.reduce((acc,p)=>{const q=parseFloat(p.qty)||0;return acc+q*parseMonto(p.price);},0);
+    const abonoN = o.abono || 0;
+    const saldoN = Math.max(totalFinal - abonoN, 0);
+    const sonLetras = numeroALetras(Math.floor(totalFinal)) + ' PESOS M/CTE';
+
+    doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text('SON:',margin+2,y+4);
+    doc.setFont('helvetica','italic');doc.setFontSize(7);doc.setTextColor(28,26,23);
+    const sonLns=doc.splitTextToSize(sonLetras,contentW*0.6-16);
+    doc.text(sonLns[0]||'',margin+14,y+3.5);
+    if(sonLns[1])doc.text(sonLns[1],margin+14,y+7.5);
+
+    const totX=margin+contentW*0.62,totW=contentW*0.38;
+    const totalesArr=[
+      {label:'ABONO $',value:formatPesos(abonoN),bg:[240,237,230]},
+      {label:'',value:'',bg:[245,242,235]},
+      {label:'SALDO $',value:formatPesos(saldoN),bg:[240,237,230]},
+      {label:'TOTAL $',value:formatPesos(totalFinal),bg:[28,26,23]},
+    ];
+    totalesArr.forEach((t,i)=>{
+      doc.setFillColor(...t.bg);doc.rect(totX,y+i*10,totW,10,'F');
+      doc.setFont('helvetica','bold');doc.setFontSize(8);
+      doc.setTextColor(i===3?196:107,i===3?154:79,i===3?60:53);
+      doc.text(t.label,totX+4,y+i*10+6.5);
+      doc.setTextColor(i===3?196:28,i===3?154:26,i===3?60:23);
+      doc.text(t.value,totX+totW-4,y+i*10+6.5,{align:'right'});
+      doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(totX,y+i*10,totW,10);
+    });
+    y+=44;
+
+    // Cláusulas
+    const clausulaTextE=[
+      '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
+      '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
+      '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
+    ];
+    let totalLinesE=0;
+    clausulaTextE.forEach(c=>{ totalLinesE+=doc.splitTextToSize(c,contentW-6).length+0.5; });
+    const clausulaHE=8+totalLinesE*3.2;
+    doc.setFillColor(245,240,232);doc.rect(margin,y,contentW,clausulaHE,'F');
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,contentW,clausulaHE);
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+    doc.text('CLÁUSULAS DE PAGO',margin+contentW/2,y+4,{align:'center'});
+    let tyE=y+8;
+    clausulaTextE.forEach(c=>{
+      const lines=doc.splitTextToSize(c,contentW-6);
+      doc.setFont('helvetica','normal');doc.setFontSize(5.8);doc.setTextColor(80,70,60);
+      doc.text(lines,margin+3,tyE); tyE+=lines.length*3.2+1;
+    });
+    y+=clausulaHE+4;
+
+    // Firmas (vacías en edición)
+    const pageHF=doc.internal.pageSize.getHeight();
+    if(y+42>pageHF-10){doc.addPage();y=15;}
+    const firmaHE=38,firmaWE=contentW/2-5;
+    doc.setFillColor(240,237,230);doc.rect(margin,y,firmaWE,firmaHE,'F');
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,firmaWE,firmaHE);
+    doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);doc.rect(margin+2,y+2,30,10,'S');
+    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
+    doc.text('ACEPTADA',margin+17,y+9,{align:'center'});
+    doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(margin+4,y+firmaHE-6,margin+firmaWE-4,y+firmaHE-6);
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+    doc.text('FIRMA Y C.C. DEL COMPRADOR',margin+firmaWE/2,y+firmaHE-2,{align:'center'});
+    const firmaVXE=margin+firmaWE+10;
+    doc.setFillColor(240,237,230);doc.rect(firmaVXE,y,firmaWE,firmaHE,'F');
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(firmaVXE,y,firmaWE,firmaHE);
+    doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(firmaVXE+4,y+firmaHE-6,firmaVXE+firmaWE-4,y+firmaHE-6);
+    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+    doc.text('FIRMA DEL VENDEDOR',firmaVXE+firmaWE/2,y+firmaHE-2,{align:'center'});
+
+    // Subir PDF
+    if(status){status.textContent='⏳ Subiendo PDF...';}
+    const pdfBlob=doc.output('blob');
+    const fileName=`OrdenPedido_CasaDams_${numOrden}_edit_${Date.now()}.pdf`;
+    const uploadRes=await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`,{
+      method:'POST',headers:{'Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY,'Content-Type':'application/pdf'},body:pdfBlob
+    });
+    const pdfLink=uploadRes.ok?`${SUPABASE_URL}/storage/v1/object/public/ordenes/${fileName}`:'';
+
+    // Actualizar pdf_url en Supabase
+    if(pdfLink){
+      await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`,{
+        method:'PATCH',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
+        body:JSON.stringify({pdf_url:pdfLink,enviado_whatsapp:true})
+      });
+      o.pdf_url=pdfLink; o.enviado_whatsapp=true;
+    }
+
+    // Enviar WhatsApp
+    if(status){status.textContent='⏳ Enviando por WhatsApp...';}
+    const telefono=(datosEdit.telefono||'').replace(/\D/g,'');
+    if(telefono){
+      const chatId=(telefono.startsWith('57')?telefono:'57'+telefono)+'@c.us';
+      const mensaje=`🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${datosEdit.cliente||'cliente'}*, se ha actualizado su orden de pedido N° *${numOrden}*:\n\n${pdfLink?`📄 ${pdfLink}`:'(PDF no disponible)'}\n\n✅ Gracias por su preferencia.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+      await fetch('/api/waha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendText',payload:{session:WAHA_SESSION,chatId,text:mensaje}})});
+    }
+
+    if(status){status.textContent='✅ Orden actualizada y enviada por WhatsApp';status.style.color='var(--green)';}
+    mostrarToast('✅ Orden reenviada exitosamente');
+    setTimeout(()=>{ cerrarEditar(); cargarHistorial(); },2000);
+  } catch(e) {
+    console.error(e);
+    if(status){status.textContent='⚠️ Error al generar/enviar PDF';status.style.color='var(--red)';}
+  }
+}
+
+function cerrarEditar() {
+  document.getElementById('editOverlay').classList.remove('show');
+  editandoOrdenId = null;
+  editFilas = [];
+}
+
+document.getElementById('editOverlay').addEventListener('click', function(e){ if(e.target===this)cerrarEditar(); });
 </script>
 </body>
 </html>
