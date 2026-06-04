@@ -1347,8 +1347,8 @@ async function generarPDFBlob() {
   y+=8;
 
   const rowMinH=8;
-  // Mínimo 8 filas visibles pero siempre mostramos todas las reales
-  const filasAPintar=Math.max(productos.length, 8);
+  // Solo pintamos los productos reales + 2 filas vacías de margen
+  const filasAPintar = productos.length + 2;
   const tablaStartY = y; // para el borde exterior
 
   for(let i=0;i<filasAPintar;i++){
@@ -2448,7 +2448,7 @@ async function guardarYReenviar() {
     y+=8;
 
     const rowMinH2=8;
-    const filasAP=Math.max(prodEdit.length,8);
+    const filasAP=prodEdit.length + 2;
     for(let i=0;i<filasAP;i++){
       const p=prodEdit[i]||{};
       const descLines2=p.desc?doc.splitTextToSize(p.desc,colWidths2[1]-4):[''];
