@@ -900,6 +900,7 @@
       <p><strong>1.</strong> El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.</p>
       <p><strong>2.</strong> CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.</p>
       <p><strong>3.</strong> En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo, en cualquier tipo de venta ya sea contado o plan separe.</p>
+      <p><strong>4.</strong> CASA DAMS S.A.S se compromete a fabricar el o los muebles descritos en la orden de Pedido con un abono inicial del 50%. El saldo se cancelará en cuanto sea notificado al cliente que el mueble se encuentra listo para su entrega final. Si llegada la fecha de entrega del producto, el cliente no ha cancelado en su totalidad el saldo restante, se dará un plazo máximo de 20 días para cancelar, de lo contrario se cobrará un 5% adicional del valor del saldo por incumplimiento.</p>
     </div>
   </div>
 
@@ -1431,7 +1432,8 @@ async function generarPDFBlob() {
   const clausulaText=[
     '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
     '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
-    '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
+    '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.',
+    '4. CASA DAMS S.A.S se compromete a fabricar el o los muebles descritos en la orden de Pedido con un abono inicial del 50%. El saldo se cancelará en cuanto sea notificado al cliente que el mueble se encuentra listo para su entrega final. Si llegada la fecha de entrega del producto, el cliente no ha cancelado en su totalidad el saldo restante, se dará un plazo máximo de 20 días para cancelar, de lo contrario se cobrará un 5% adicional del valor del saldo por incumplimiento.'
   ];
   let totalLines=0;
   clausulaText.forEach(c=>{ totalLines+=doc.splitTextToSize(c,contentW-6).length+0.5; });
@@ -2092,11 +2094,32 @@ async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
     let offsetY = 0;
     canvasList.forEach(c => { ctx.drawImage(c, 0, offsetY); offsetY += c.height; });
 
+    // Recortar filas blancas al final del canvas
+    const imageData = ctx.getImageData(0, 0, finalCanvas.width, finalCanvas.height);
+    const pixels = imageData.data;
+    let lastContentRow = 0;
+    for (let row = finalCanvas.height - 1; row >= 0; row--) {
+      let isBlank = true;
+      for (let col = 0; col < finalCanvas.width; col++) {
+        const idx = (row * finalCanvas.width + col) * 4;
+        if (pixels[idx] < 250 || pixels[idx+1] < 250 || pixels[idx+2] < 250) {
+          isBlank = false; break;
+        }
+      }
+      if (!isBlank) { lastContentRow = row; break; }
+    }
+    // Canvas recortado (con padding de 20px abajo)
+    const croppedH = Math.min(lastContentRow + 20, finalCanvas.height);
+    const croppedCanvas = document.createElement('canvas');
+    croppedCanvas.width = finalCanvas.width;
+    croppedCanvas.height = croppedH;
+    croppedCanvas.getContext('2d').drawImage(finalCanvas, 0, 0);
+
     // Descargar
     const nombreLimpio = (cliente || 'cliente').replace(/\s+/g, '-').substring(0, 30);
     const link = document.createElement('a');
     link.download = `OrdenCasaDams-${numeroOrden}-${nombreLimpio}.png`;
-    link.href = finalCanvas.toDataURL('image/png');
+    link.href = croppedCanvas.toDataURL('image/png');
     link.click();
     mostrarToast('✅ Imagen descargada');
   } catch(e) {
@@ -2485,7 +2508,8 @@ async function guardarYReenviar() {
     const clausulaTextE=[
       '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
       '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
-      '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.'
+      '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.',
+      '4. CASA DAMS S.A.S se compromete a fabricar el o los muebles descritos en la orden de Pedido con un abono inicial del 50%. El saldo se cancelará en cuanto sea notificado al cliente que el mueble se encuentra listo para su entrega final. Si llegada la fecha de entrega del producto, el cliente no ha cancelado en su totalidad el saldo restante, se dará un plazo máximo de 20 días para cancelar, de lo contrario se cobrará un 5% adicional del valor del saldo por incumplimiento.'
     ];
     let totalLinesE=0;
     clausulaTextE.forEach(c=>{ totalLinesE+=doc.splitTextToSize(c,contentW-6).length+0.5; });
