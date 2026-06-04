@@ -86,10 +86,28 @@
     padding: 9px 8px;
     font-size: 14px;
   }
-  .productos-lista .producto-row input:focus {
+  .productos-lista .producto-row textarea.desc-input {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 9px 8px;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    resize: none;
+    overflow: hidden;
+    min-height: 38px;
+    line-height: 1.45;
+    width: 100%;
+    box-sizing: border-box;
+    display: block;
+    align-self: center;
+  }
+  .productos-lista .producto-row input:focus,
+  .productos-lista .producto-row textarea.desc-input:focus {
     background: var(--white);
     border-color: var(--gold);
     box-shadow: 0 0 0 2px rgba(196,154,60,0.15);
+    outline: none;
   }
   .productos-lista .subtotal-display {
     font-weight: 700;
@@ -352,7 +370,8 @@
       padding: 10px;
     }
     .productos-lista .productos-header span { font-size: 9px; }
-    .productos-lista .producto-row input { font-size: 13px; padding: 8px 6px; }
+    .productos-lista .producto-row input,
+    .productos-lista .producto-row textarea.desc-input { font-size: 13px; padding: 8px 6px; }
     .layout-switch button { padding: 6px 12px; font-size: 11px; }
     .layout-switch button span { display: none; }
   }
@@ -377,6 +396,7 @@
     .productos-lista .producto-row .photo-slot { grid-area: photo; width: 100%; height: 90px; }
     .productos-lista .producto-row > input:nth-of-type(1) { grid-area: qty; }
     .productos-lista .producto-row > input:nth-of-type(2) { grid-area: desc; }
+    .productos-lista .producto-row textarea.desc-input { grid-area: desc; }
     .productos-lista .producto-row > input:nth-of-type(3) { grid-area: price; }
     .productos-lista .producto-row .subtotal-display { grid-area: subtotal; }
     .productos-lista .producto-row .btn-delete-row { grid-area: delete; justify-self: end; }
