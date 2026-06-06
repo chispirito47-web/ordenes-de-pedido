@@ -501,8 +501,8 @@ let CLIENTES = [];   // {id, nombre, cedula, telefono, created_at}
 let MOVS = [];       // {id, cliente_id, tipo, monto, fecha, metodo, ref, nota, foto_url, created_at}
 let currentClienteId = null;
 let movMode = 'abono';
-let fotoDataUrl = null;
-let fotoFile = null;
+let fotosFiles = [];  // array de File objects
+
 let lastCompMovId = null;
 
 /* ════════════════════════════════════
@@ -688,7 +688,7 @@ async function submitNuevoCliente(){
    MODAL: MOVIMIENTO
 ════════════════════════════════════ */
 function openMov(mode){
-  movMode=mode; fotoDataUrl=null; fotoFile=null;
+  movMode=mode; fotosFiles=[];
   const isAbono=mode==='abono';
   document.getElementById('movTitle').textContent=isAbono?'Registrar abono':'Registrar consumo';
   document.getElementById('movEyebrow').textContent=getCliente(currentClienteId).nombre;
@@ -728,20 +728,33 @@ function updateBalPreview(){
 }
 
 function onFotoChange(input){
-  const file=input.files&&input.files[0]; if(!file) return;
-  fotoFile=file;
-  const r=new FileReader();
-  r.onload=e=>{
-    fotoDataUrl=e.target.result;
-    document.getElementById('fotoThumbImg').src=fotoDataUrl;
-    document.getElementById('fotoThumbName').textContent=file.name;
-    document.getElementById('fotoThumb').classList.add('show');
-    document.getElementById('fotoZone').style.display='none';
-  };
-  r.readAsDataURL(file);
+  const files=Array.from(input.files||[]); if(!files.length) return;
+  fotosFiles = fotosFiles.concat(files);
+  renderFotoThumbs();
+}
+function renderFotoThumbs(){
+  const thumb=document.getElementById('fotoThumb');
+  const zone=document.getElementById('fotoZone');
+  if(!fotosFiles.length){thumb.classList.remove('show');zone.style.display='block';return;}
+  thumb.classList.add('show');
+  zone.style.display='none';
+  thumb.innerHTML=fotosFiles.map((f,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);">
+      <img src="${URL.createObjectURL(f)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;">
+      <div style="flex:1;min-width:0;">
+        <div class="foto-thumb-name">${f.name}</div>
+        <div style="font-size:12px;color:var(--ink-faint);">Imagen ${i+1}</div>
+      </div>
+      <button class="foto-thumb-btn" onclick="quitarFoto(${i})">Quitar</button>
+    </div>`).join('');
+}
+function quitarFoto(i){
+  fotosFiles.splice(i,1);
+  renderFotoThumbs();
+  if(!fotosFiles.length){const inp=document.getElementById('f_foto');if(inp)inp.value='';}
 }
 function clearFoto(){
-  fotoDataUrl=null; fotoFile=null;
+  fotosFiles=[];
   const inp=document.getElementById('f_foto'); if(inp) inp.value='';
   document.getElementById('fotoThumb').classList.remove('show');
   document.getElementById('fotoZone').style.display='block';
@@ -755,11 +768,8 @@ function clearFoto(){
   ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove('drag');}));
   zone.addEventListener('drop',e=>{
     const file=e.dataTransfer.files&&e.dataTransfer.files[0];
-    if(file&&file.type.startsWith('image/')){
-      const inp=document.getElementById('f_foto');
-      inp.files=e.dataTransfer.files;
-      onFotoChange(inp);
-    }
+    const imgs=Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'));
+    if(imgs.length){fotosFiles=fotosFiles.concat(imgs);renderFotoThumbs();}
   });
 })();
 
@@ -788,14 +798,18 @@ async function submitMov(){
   }
   const btn=document.getElementById('movSubmit'); btn.disabled=true;
   try {
-    let foto_url=null;
-    if(fotoFile){
-      loading(true,'Subiendo foto…');
-      const ext=fotoFile.name.split('.').pop();
-      foto_url=await subirFoto(fotoFile,`fotos/${currentClienteId}_${Date.now()}.${ext}`);
+    let fotos_urls=[];
+    if(fotosFiles.length){
+      loading(true,`Subiendo ${fotosFiles.length} foto(s)…`);
+      for(let i=0;i<fotosFiles.length;i++){
+        const f=fotosFiles[i];
+        const ext=f.name.split('.').pop();
+        const url=await subirFoto(f,`fotos/${currentClienteId}_${Date.now()}_${i}.${ext}`);
+        fotos_urls.push(url);
+      }
     }
     loading(true,'Guardando…');
-    const [mov]=await sbPost('depositos_movimientos',{cliente_id:currentClienteId,tipo:movMode,monto,fecha,metodo,ref,nota,foto_url});
+    const [mov]=await sbPost('depositos_movimientos',{cliente_id:currentClienteId,tipo:movMode,monto,fecha,metodo,ref,nota,fotos_urls});
     MOVS.push({...mov, monto:Number(mov.monto)});
     loading(false);
     closeMov();
@@ -842,8 +856,11 @@ function openComp(movId){
   document.getElementById('compLetras').textContent=numeroALetras(mov.monto);
   document.getElementById('compSaldo').textContent=fmtCOP(saldoHasta(mov));
   const pw=document.getElementById('compPhotoWrap');
-  if(mov.foto_url){pw.style.display='block';document.getElementById('compPhoto').src=mov.foto_url;}
-  else pw.style.display='none';
+  const fotos=mov.fotos_urls&&mov.fotos_urls.length?mov.fotos_urls:(mov.foto_url?[mov.foto_url]:[]);
+  if(fotos.length){
+    pw.style.display='block';
+    pw.innerHTML=fotos.map(u=>`<img src="${u}" alt="Comprobante" style="width:100%;border-radius:8px;display:block;margin-bottom:8px;">`).join('');
+  } else pw.style.display='none';
   const notaEl=document.getElementById('compNota');
   notaEl.textContent=mov.nota||'';
   notaEl.style.display=mov.nota?'block':'none';
