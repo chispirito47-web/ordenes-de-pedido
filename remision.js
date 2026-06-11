@@ -128,6 +128,13 @@ function cerrarSugerencias() {
   if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
 }
 
+function posicionarDropdown(el) {
+  const inputRect = document.getElementById('ordenRef').getBoundingClientRect();
+  el.style.top = (inputRect.bottom + 4) + 'px';
+  el.style.left = inputRect.left + 'px';
+  el.style.width = inputRect.width + 'px';
+}
+
 async function buscarOrdenesSugerencias() {
   const raw = document.getElementById('ordenRef').value.trim();
   const el = document.getElementById('ordenSugerencias');
@@ -151,6 +158,7 @@ async function buscarOrdenesSugerencias() {
 
       if (!Array.isArray(data) || data.length === 0) {
         el.innerHTML = '<div class="sugerencias-empty">Sin resultados</div>';
+        posicionarDropdown(el);
         el.classList.add('visible');
         return;
       }
@@ -166,6 +174,7 @@ async function buscarOrdenesSugerencias() {
           </div>`;
       }).join('');
 
+      posicionarDropdown(el);
       el.classList.add('visible');
     } catch (e) {
       cerrarSugerencias();
