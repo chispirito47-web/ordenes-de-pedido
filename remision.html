@@ -51,6 +51,59 @@
   .btn-cargar-orden.loading .label { opacity: 0.7; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Dropdown sugerencias */
+  .orden-ref-wrap {
+    position: relative;
+  }
+  .orden-sugerencias {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--white);
+    border: 1.5px solid var(--gold);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+    z-index: 999;
+    overflow: hidden;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .orden-sugerencias.visible { display: block; }
+  .sugerencia-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sugerencia-item:last-child { border-bottom: none; }
+  .sugerencia-item:hover, .sugerencia-item.highlighted { background: #F5F0E8; }
+  .sugerencia-num {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--gold);
+  }
+  .sugerencia-cliente {
+    font-size: 13px;
+    color: var(--dark);
+    font-weight: 600;
+  }
+  .sugerencia-meta {
+    font-size: 11px;
+    color: var(--warm-gray);
+  }
+  .sugerencias-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--warm-gray);
+    font-size: 13px;
+  }
+
   .ref-info {
     margin-top: 10px;
     background: linear-gradient(135deg, var(--gold-tint) 0%, transparent 100%);
@@ -246,7 +299,10 @@
     <div style="margin-top:14px">
       <label style="display:block;margin-bottom:6px">Cargar desde Orden de Pedido <span style="color:var(--warm-gray-2);font-weight:400;text-transform:none;font-size:11px;letter-spacing:0">(opcional — pega el N° de orden si existe)</span></label>
       <div class="orden-ref-row">
-        <input type="text" id="ordenRef" placeholder="Ej: 4022">
+        <div class="orden-ref-wrap">
+          <input type="text" id="ordenRef" placeholder="Escribe el N° de orden..." autocomplete="off">
+          <div class="orden-sugerencias" id="ordenSugerencias"></div>
+        </div>
         <button class="btn-cargar-orden" id="btnCargarOrden" onclick="cargarDesdeOrden()">
           <span class="spinner"></span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

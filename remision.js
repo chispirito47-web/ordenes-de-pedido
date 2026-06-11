@@ -55,6 +55,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ordenRef').addEventListener('keypress', e => {
     if (e.key === 'Enter') { e.preventDefault(); cargarDesdeOrden(); }
   });
+
+  // Búsqueda en vivo con dropdown
+  document.getElementById('ordenRef').addEventListener('input', () => buscarOrdenesSugerencias());
+
+  // Cerrar dropdown al hacer click fuera
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.orden-ref-wrap')) cerrarSugerencias();
+  });
 });
 
 function formatNumRem(n) {
@@ -112,31 +120,102 @@ function escapeAttr(v) {
   return String(v ?? '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+/* ---------- SUGERENCIAS EN VIVO ---------- */
+let _sugerenciasTimer = null;
+
+function cerrarSugerencias() {
+  const el = document.getElementById('ordenSugerencias');
+  if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
+}
+
+async function buscarOrdenesSugerencias() {
+  const raw = document.getElementById('ordenRef').value.trim();
+  const el = document.getElementById('ordenSugerencias');
+
+  if (!raw || raw.length < 1) { cerrarSugerencias(); return; }
+
+  clearTimeout(_sugerenciasTimer);
+  _sugerenciasTimer = setTimeout(async () => {
+    try {
+      // Buscar por numero_orden que contenga el texto (ilike)
+      const digits = raw.replace(/\D/g, '');
+      // Buscar con ilike en numero_orden para coincidencias parciales
+      const query = digits
+        ? `numero_orden=ilike.*${digits}*`
+        : `numero_orden=ilike.*${encodeURIComponent(raw)}*`;
+
+      const res = await fetch(`${SUPA_URL}/rest/v1/pedidos?${query}&select=numero_orden,cliente,vendedor,fecha_orden,valor_total&order=created_at.desc&limit=8`, {
+        headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+      });
+      const data = await res.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        el.innerHTML = '<div class="sugerencias-empty">Sin resultados</div>';
+        el.classList.add('visible');
+        return;
+      }
+
+      el.innerHTML = data.map((o, i) => {
+        const fecha = o.fecha_orden ? new Date(o.fecha_orden + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+        const valor = o.valor_total ? '$' + Number(o.valor_total).toLocaleString('es-CO') : '';
+        return `
+          <div class="sugerencia-item" onclick="seleccionarSugerencia('${o.numero_orden}')">
+            <span class="sugerencia-num">${o.numero_orden}</span>
+            <span class="sugerencia-cliente">👤 ${o.cliente || '—'}</span>
+            <span class="sugerencia-meta">${[o.vendedor, fecha, valor].filter(Boolean).join(' · ')}</span>
+          </div>`;
+      }).join('');
+
+      el.classList.add('visible');
+    } catch (e) {
+      cerrarSugerencias();
+    }
+  }, 250); // debounce 250ms
+}
+
+function seleccionarSugerencia(numeroOrden) {
+  document.getElementById('ordenRef').value = numeroOrden;
+  cerrarSugerencias();
+  cargarDesdeOrden();
+}
+
 /* ---------- CARGAR DESDE ORDEN (SUPABASE) ---------- */
 async function cargarDesdeOrden() {
-  const num = document.getElementById('ordenRef').value.trim();
-  if (!num) { mostrarToast('⚠ Ingresa un N° de orden'); return; }
+  const raw = document.getElementById('ordenRef').value.trim();
+  if (!raw) { mostrarToast('⚠ Ingresa un N° de orden'); return; }
+
+  // Normalizar: acepta "1", "001", "ORD/001", "ORD001", "ORD-001"
+  const digits = raw.replace(/\D/g, '');
+  const numPadded = digits ? 'ORD/' + digits.padStart(3, '0') : raw.toUpperCase();
 
   const btn = document.getElementById('btnCargarOrden');
   btn.classList.add('loading');
   btn.disabled = true;
 
   try {
-    const res = await fetch(`${SUPA_URL}/rest/v1/pedidos?numero_orden=eq.${encodeURIComponent(num)}&select=*&order=created_at.desc&limit=1`, {
-      headers: {
-        'apikey': SUPA_KEY,
-        'Authorization': 'Bearer ' + SUPA_KEY
-      }
-    });
-    const data = await res.json();
+    // Buscar primero por numero_orden normalizado, luego por op como fallback
+    const headers = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY };
+    let data = [];
+
+    const res1 = await fetch(`${SUPA_URL}/rest/v1/pedidos?numero_orden=eq.${encodeURIComponent(numPadded)}&select=*&order=created_at.desc&limit=1`, { headers });
+    data = await res1.json();
+
+    // Si no encontró, intentar con el texto tal como lo escribió el usuario
     if (!Array.isArray(data) || data.length === 0) {
-      mostrarToast('⚠ No se encontró la orden ' + num);
-      const refInfo = document.getElementById('refInfo');
-      refInfo.classList.remove('show');
+      const res2 = await fetch(`${SUPA_URL}/rest/v1/pedidos?op=eq.${encodeURIComponent(numPadded)}&select=*&order=created_at.desc&limit=1`, { headers });
+      data = await res2.json();
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      mostrarToast('⚠ No se encontró la orden ' + numPadded);
+      document.getElementById('refInfo').classList.remove('show');
       return;
     }
 
     const orden = data[0];
+
+    // Actualizar el campo con el número normalizado para que quede en el PDF
+    document.getElementById('ordenRef').value = orden.numero_orden || numPadded;
 
     // Rellenar campos del cliente
     if (orden.cliente) document.getElementById('clienteNombre').value = orden.cliente;
@@ -146,14 +225,14 @@ async function cargarDesdeOrden() {
     if (orden.telefono) document.getElementById('clienteTel').value = orden.telefono;
     if (orden.vendedor) document.getElementById('vendedor').value = orden.vendedor;
 
-    // Cargar productos (sin precios)
+    // Cargar productos (sin precios) — compatible con desc y description
     if (Array.isArray(orden.productos) && orden.productos.length > 0) {
       items = orden.productos
-        .filter(p => p.qty || p.desc)
+        .filter(p => p.qty || p.desc || p.description)
         .map(p => ({
           id: Date.now() + Math.random().toString(36).slice(2, 5),
           qty: p.qty || '',
-          desc: p.desc || ''
+          desc: p.desc || p.description || ''
         }));
       if (items.length === 0) {
         agregarFila();
