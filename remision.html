@@ -13,12 +13,6 @@
      ===================================================== */
 
   /* Banner orden referencia con animación */
-  .orden-ref-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    align-items: end;
-  }
   .btn-cargar-orden {
     background: var(--dark);
     color: var(--gold);
@@ -54,6 +48,12 @@
   /* Dropdown sugerencias */
   .orden-ref-wrap {
     position: relative;
+    flex: 1;
+  }
+  .orden-ref-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
   }
   .orden-sugerencias {
     display: none;
@@ -61,12 +61,12 @@
     background: var(--white);
     border: 1.5px solid var(--gold);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22);
     z-index: 9999;
     overflow: hidden;
     max-height: 260px;
     overflow-y: auto;
-    min-width: 260px;
+    min-width: 220px;
   }
   .orden-sugerencias.visible { display: block; }
   .sugerencia-item {
@@ -79,7 +79,7 @@
     gap: 2px;
   }
   .sugerencia-item:last-child { border-bottom: none; }
-  .sugerencia-item:hover, .sugerencia-item.highlighted { background: #F5F0E8; }
+  .sugerencia-item:hover, .sugerencia-item:active { background: #F5F0E8; }
   .sugerencia-num {
     font-family: 'Playfair Display', serif;
     font-weight: 700;
@@ -100,6 +100,10 @@
     text-align: center;
     color: var(--warm-gray);
     font-size: 13px;
+  }
+  @media (max-width: 600px) {
+    .orden-ref-row { flex-direction: column; align-items: stretch; }
+    .btn-cargar-orden { justify-content: center; }
   }
 
   .ref-info {
@@ -299,7 +303,6 @@
       <div class="orden-ref-row">
         <div class="orden-ref-wrap">
           <input type="text" id="ordenRef" placeholder="Escribe el N° de orden..." autocomplete="off">
-          <div class="orden-sugerencias" id="ordenSugerencias"></div>
         </div>
         <button class="btn-cargar-orden" id="btnCargarOrden" onclick="cargarDesdeOrden()">
           <span class="spinner"></span>

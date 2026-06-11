@@ -61,7 +61,17 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Cerrar dropdown al hacer click fuera
   document.addEventListener('click', e => {
-    if (!e.target.closest('.orden-ref-wrap')) cerrarSugerencias();
+    if (!e.target.closest('.orden-ref-wrap') && e.target.id !== 'ordenRef') cerrarSugerencias();
+  });
+
+  // Reposicionar dropdown al hacer scroll o resize (importante en móvil/iPad)
+  window.addEventListener('scroll', () => {
+    const el = document.getElementById('ordenSugerencias');
+    if (el && el.classList.contains('visible')) posicionarDropdown(el);
+  }, true);
+  window.addEventListener('resize', () => {
+    const el = document.getElementById('ordenSugerencias');
+    if (el && el.classList.contains('visible')) posicionarDropdown(el);
   });
 });
 
@@ -123,6 +133,18 @@ function escapeAttr(v) {
 /* ---------- SUGERENCIAS EN VIVO ---------- */
 let _sugerenciasTimer = null;
 
+// Crear el dropdown en body para que nunca quede tapado
+function _crearDropdownSugerencias() {
+  let el = document.getElementById('ordenSugerencias');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ordenSugerencias';
+    el.className = 'orden-sugerencias';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
 function cerrarSugerencias() {
   const el = document.getElementById('ordenSugerencias');
   if (el) { el.classList.remove('visible'); el.innerHTML = ''; }
@@ -130,14 +152,22 @@ function cerrarSugerencias() {
 
 function posicionarDropdown(el) {
   const inputRect = document.getElementById('ordenRef').getBoundingClientRect();
-  el.style.top = (inputRect.bottom + 4) + 'px';
-  el.style.left = inputRect.left + 'px';
-  el.style.width = inputRect.width + 'px';
+  const isMobile = window.innerWidth <= 600;
+  if (isMobile) {
+    // En móvil ocupa casi todo el ancho de pantalla
+    el.style.top = (inputRect.bottom + 4) + 'px';
+    el.style.left = '12px';
+    el.style.width = (window.innerWidth - 24) + 'px';
+  } else {
+    el.style.top = (inputRect.bottom + 4) + 'px';
+    el.style.left = inputRect.left + 'px';
+    el.style.width = inputRect.width + 'px';
+  }
 }
 
 async function buscarOrdenesSugerencias() {
   const raw = document.getElementById('ordenRef').value.trim();
-  const el = document.getElementById('ordenSugerencias');
+  const el = _crearDropdownSugerencias();
 
   if (!raw || raw.length < 1) { cerrarSugerencias(); return; }
 
