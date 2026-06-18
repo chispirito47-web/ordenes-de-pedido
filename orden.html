@@ -843,6 +843,12 @@
         <input type="email" id="clienteCorreo" placeholder="cliente@email.com">
       </div>
     </div>
+    <div class="form-row cols-2">
+      <div class="field">
+        <label>Teléfono opcional <span style="color:var(--warm-gray);font-weight:400;">(contacto alterno)</span></label>
+        <input type="tel" id="clienteTelOpcional" placeholder="300 000 0000">
+      </div>
+    </div>
   </div>
 
   <!-- PRODUCTOS -->
@@ -988,7 +994,7 @@
     <input class="modal-input" type="tel" id="waNumero" placeholder="573001234567" maxlength="15">
     <div class="modal-actions">
       <button class="modal-btn cancel" onclick="cerrarModal()">Cancelar</button>
-      <button class="modal-btn confirm" onclick="enviarWhatsApp()">Enviar ✓</button>
+      <button id="btnEnviarWA" class="modal-btn confirm" onclick="enviarWhatsApp()">Enviar ✓</button>
     </div>
   </div>
 </div>
@@ -1265,6 +1271,7 @@ function getDatos() {
     ciudad: document.getElementById('clienteCiudad').value,
     cc: document.getElementById('clienteCC').value,
     tel: document.getElementById('clienteTel').value,
+    telOpcional: document.getElementById('clienteTelOpcional').value,
     correo: document.getElementById('clienteCorreo').value,
     abono: '$' + getTotalAbonos().toLocaleString('es-CO'),
     abonosDetalle: getAbonosDetalle(),
@@ -1534,11 +1541,23 @@ function cerrarModal() { document.getElementById('modalWA').classList.remove('sh
 async function enviarWhatsApp() {
   const numero = document.getElementById('waNumero').value.replace(/\D/g,'');
   if (!numero || numero.length < 10) { mostrarToast('⚠️ Ingresa un número válido'); return; }
+
+  // --- Candado anti doble-clic / doble envío ---
+  const btnEnviar = document.getElementById('btnEnviarWA');
+  if (btnEnviar && btnEnviar.disabled) return; // ya hay un envío en curso, ignorar clics extra
+  if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
+
   cerrarModal();
   mostrarToast('⏳ Generando PDF...');
   try {
     const datos = getDatos();
     const chatId = numero + '@c.us';
+
+    // --- Reservar el número de orden ANTES de generar/enviar nada ---
+    // Así, aunque el usuario insista en dar clic o algo falle a mitad de camino,
+    // el consecutivo ya avanzó y la próxima orden nunca repetirá este número.
+    await incrementarConsecutivoOrden();
+
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
     const fileName = `OrdenPedido_CasaDams_${datos.numero.replace('/','_')}_${Date.now()}.pdf`;
@@ -1569,6 +1588,7 @@ async function enviarWhatsApp() {
         body: JSON.stringify({
           numero_orden: datos.numero, op: datos.numero,
           cliente: datos.nombre||'', telefono: datos.tel||'',
+          telefono_opcional: datos.telOpcional||'',
           cedula: datos.cc||'', direccion: datos.direccion||'',
           ciudad: datos.ciudad||'', correo: datos.correo||'',
           vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
@@ -1588,14 +1608,15 @@ async function enviarWhatsApp() {
         console.error('Supabase error:', resSupabase.status, errTxt);
         mostrarToast('✅ WA enviado · ⚠️ Error al guardar en historial');
       } else {
-        // Incrementar consecutivo en Supabase
-        await incrementarConsecutivoOrden();
         mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
       }
     } else { throw new Error('WAHA error'); }
   } catch(e) {
     console.error(e);
     mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
+  } finally {
+    // Siempre liberar el botón al terminar, sea éxito o error
+    if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
   }
 }
 
@@ -1650,6 +1671,7 @@ function limpiarTodo() {
   document.getElementById('clienteCiudad').value='';
   document.getElementById('clienteCC').value='';
   document.getElementById('clienteTel').value='';
+  document.getElementById('clienteTelOpcional').value='';
   document.getElementById('clienteCorreo').value='';
   document.getElementById('abonosContainer').innerHTML=''; calcularSaldo();
   document.getElementById('totalSubtotal').textContent='$0';
@@ -1842,6 +1864,7 @@ async function verDetalle(id) {
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
       <div class="detalle-field"><span class="det-label">Teléfono</span><span class="det-val">${o.telefono||'—'}</span></div>
+      ${o.telefono_opcional?`<div class="detalle-field"><span class="det-label">Tel. opcional</span><span class="det-val">${o.telefono_opcional}</span></div>`:''}
       <div class="detalle-field"><span class="det-label">C.C. / NIT</span><span class="det-val">${o.cedula||'—'}</span></div>
       <div class="detalle-field"><span class="det-label">Ciudad</span><span class="det-val">${o.ciudad||'—'}</span></div>
       <div class="detalle-field"><span class="det-label">Dirección</span><span class="det-val">${o.direccion||'—'}</span></div>
@@ -2175,6 +2198,9 @@ function abrirEditar(id) {
         <div class="field"><label>C.C. / NIT</label><input type="text" id="eCC" value="${o.cedula||''}"></div>
         <div class="field"><label>Ciudad</label><input type="text" id="eCiudad" value="${o.ciudad||''}"></div>
       </div>
+      <div class="form-row cols-2" style="margin-bottom:12px;">
+        <div class="field"><label>Teléfono opcional <span style="color:var(--warm-gray);font-weight:400;">(contacto alterno)</span></label><input type="text" id="eTelOpcional" value="${o.telefono_opcional||''}"></div>
+      </div>
       <div class="form-row cols-1" style="margin-bottom:12px;">
         <div class="field"><label>Dirección</label><input type="text" id="eDireccion" value="${(o.direccion||'').replace(/"/g,'&quot;')}"></div>
       </div>
@@ -2318,6 +2344,7 @@ function getEditDatos() {
   return {
     cliente:     document.getElementById('eCliente')?.value || '',
     telefono:    document.getElementById('eTel')?.value || '',
+    telefono_opcional: document.getElementById('eTelOpcional')?.value || '',
     cedula:      document.getElementById('eCC')?.value || '',
     ciudad:      document.getElementById('eCiudad')?.value || '',
     direccion:   document.getElementById('eDireccion')?.value || '',
@@ -2348,6 +2375,7 @@ async function guardarEdicion(silencioso) {
     body: JSON.stringify({
       cliente:       datos.cliente,
       telefono:      datos.telefono,
+      telefono_opcional: datos.telefono_opcional,
       cedula:        datos.cedula,
       ciudad:        datos.ciudad,
       direccion:     datos.direccion,
