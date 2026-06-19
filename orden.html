@@ -772,7 +772,7 @@
     <div class="card-title">Información de la Orden</div>
     <div class="form-row cols-3">
       <div class="field">
-        <label>N° de Orden</label>
+        <label>N° de Orden <span style="color:var(--warm-gray);font-weight:400;font-size:12px;">(provisional, se confirma al enviar)</span></label>
         <input type="text" id="numeroOrden" placeholder="ORD/001" oninput="document.getElementById('displayNumero').textContent = this.value || '—'" style="font-family:'Playfair Display',serif;font-weight:700;font-size:17px;letter-spacing:1px;">
       </div>
       <div class="field">
@@ -1554,9 +1554,13 @@ async function enviarWhatsApp() {
     const chatId = numero + '@c.us';
 
     // --- Reservar el número de orden ANTES de generar/enviar nada ---
-    // Así, aunque el usuario insista en dar clic o algo falle a mitad de camino,
-    // el consecutivo ya avanzó y la próxima orden nunca repetirá este número.
-    await incrementarConsecutivoOrden();
+    // Usa una función atómica en Supabase (siguiente_consecutivo) para que,
+    // aunque haya varias pestañas/dispositivos abiertos al mismo tiempo,
+    // cada uno reciba un número distinto y nunca se repita.
+    const numeroReal = await reservarNumeroOrden();
+    datos.numero = numeroReal; // sobreescribe el número "provisional" mostrado al abrir la página
+    document.getElementById('numeroOrden').value = numeroReal;
+    document.getElementById('displayNumero').textContent = numeroReal;
 
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
@@ -1620,23 +1624,27 @@ async function enviarWhatsApp() {
   }
 }
 
-async function incrementarConsecutivoOrden() {
+async function reservarNumeroOrden() {
   try {
-    // Intentar PATCH (actualizar si existe)
-    const resPatch = await fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden`, {
-      method: 'PATCH',
-      headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
-      body: JSON.stringify({ valor: numeroOrdenActual })
+    // Llama a la función atómica en Supabase: incrementa y devuelve el
+    // nuevo valor en una sola operación de base de datos, sin posibilidad
+    // de que dos pestañas/dispositivos reciban el mismo número.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/siguiente_consecutivo`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY },
+      body: JSON.stringify({ clave_param: 'orden' })
     });
-    if (!resPatch.ok) {
-      // Si no existe, hacer INSERT (upsert manual)
-      await fetch(`${SUPABASE_URL}/rest/v1/consecutivos`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates' },
-        body: JSON.stringify({ clave: 'orden', valor: numeroOrdenActual })
-      });
-    }
-  } catch(e) { console.warn('No se pudo actualizar consecutivo orden:', e); }
+    if (!res.ok) throw new Error('RPC siguiente_consecutivo falló: ' + res.status);
+    const nuevoValor = await res.json(); // la función devuelve directamente el integer
+    numeroOrdenActual = nuevoValor;
+    return formatNumOrden(nuevoValor);
+  } catch(e) {
+    console.error('No se pudo reservar número de orden atómicamente:', e);
+    // Fallback: si Supabase falla, usamos el número que ya estaba mostrado
+    // (mejor enviar con riesgo de repetido que no poder enviar nada).
+    mostrarToast('⚠️ No se pudo verificar el consecutivo, revisa el número luego');
+    return document.getElementById('numeroOrden').value || formatNumOrden(numeroOrdenActual);
+  }
 }
 
 // ========================
