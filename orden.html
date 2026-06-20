@@ -1040,6 +1040,15 @@ window.onload = async () => {
   const hoy = new Date().toISOString().split('T')[0];
   document.getElementById('fechaFactura').value = hoy;
 
+  // --- Avisar si quedó alguna orden respaldada localmente por un fallo de guardado anterior ---
+  try {
+    const pendientes = JSON.parse(localStorage.getItem('casadams_ordenes_pendientes') || '[]');
+    if (pendientes.length > 0) {
+      mostrarToast(`⚠️ Hay ${pendientes.length} orden(es) sin guardar en el historial — revisa la consola (F12)`);
+      console.warn('Órdenes pendientes de guardar manualmente en Supabase:', pendientes);
+    }
+  } catch(e) { /* noop */ }
+
   // Leer consecutivo desde Supabase (tabla consecutivos, clave 'orden')
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
@@ -1586,10 +1595,7 @@ async function enviarWhatsApp() {
     if (res.ok) {
       mostrarToast('⏳ Guardando orden...');
       const limpiarNum = v => parseMonto(v || '0');
-      const resSupabase = await fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
-        body: JSON.stringify({
+      const payloadPedido = {
           numero_orden: datos.numero, op: datos.numero,
           cliente: datos.nombre||'', telefono: datos.tel||'',
           telefono_opcional: datos.telOpcional||'',
@@ -1605,12 +1611,37 @@ async function enviarWhatsApp() {
           saldo_pendiente: limpiarNum(datos.saldo),
           pdf_url: pdfLink||'', enviado_whatsapp: true,
           notas: datos.son||''
-        })
+      };
+
+      const guardarPedido = () => fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+        body: JSON.stringify(payloadPedido)
       });
+
+      let resSupabase = await guardarPedido();
+
+      // --- Reintento automático: un fallo de red/timeout no debe perder la orden ---
+      if (!resSupabase.ok) {
+        console.warn('Primer intento de guardado falló, reintentando en 1.5s...');
+        await new Promise(r => setTimeout(r, 1500));
+        resSupabase = await guardarPedido();
+      }
+
       if (!resSupabase.ok) {
         const errTxt = await resSupabase.text();
-        console.error('Supabase error:', resSupabase.status, errTxt);
-        mostrarToast('✅ WA enviado · ⚠️ Error al guardar en historial');
+        console.error('Supabase error tras reintento:', resSupabase.status, errTxt);
+
+        // --- Red de seguridad: guardar localmente para no perder la orden ---
+        try {
+          const pendientes = JSON.parse(localStorage.getItem('casadams_ordenes_pendientes') || '[]');
+          pendientes.push({ payload: payloadPedido, fecha_guardado: new Date().toISOString() });
+          localStorage.setItem('casadams_ordenes_pendientes', JSON.stringify(pendientes));
+        } catch(eLocal) { console.error('No se pudo guardar respaldo local:', eLocal); }
+
+        mostrarToast('⚠️ Error al guardar en historial');
+        // Alerta bloqueante: el toast desaparece solo y esto no se puede pasar por alto
+        alert(`⚠️ ATENCIÓN: la orden ${datos.numero} de ${datos.nombre||'cliente'} se envió por WhatsApp pero NO se guardó en el historial.\n\nQuedó respaldada localmente en este navegador. Avisa a Chispi para insertarla manualmente en Supabase.\n\nNo cierres esta pestaña hasta confirmar que se resolvió.`);
       } else {
         mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
       }
