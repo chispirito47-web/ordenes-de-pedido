@@ -1556,125 +1556,193 @@ async function enviarWhatsApp() {
   if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
 
   cerrarModal();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 1 — Reservar número atómico en Supabase
+  // Debe hacerse primero y UNA SOLA VEZ. Si falla completamente, abortamos
+  // ANTES de consumir nada — el consecutivo no se toca.
+  // ─────────────────────────────────────────────────────────────────────────
   mostrarToast('⏳ Reservando número de orden...');
+  let numeroReservado;
   try {
-    const datos = getDatos();
-    const chatId = numero + '@c.us';
+    numeroReservado = await reservarNumeroOrden();
+  } catch(e) {
+    console.error('No se pudo reservar número:', e);
+    mostrarToast('⚠️ No se pudo conectar con Supabase. Verifica internet e intenta de nuevo.');
+    if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
+    return; // Abortar completamente — consecutivo intacto
+  }
 
-    // --- Reservar número UNA SOLA VEZ al inicio ---
-    // El RPC es atómico: aunque haya varios dispositivos, cada uno recibe un número único.
-    // Guardamos el número en numeroReservado para que cualquier reintento use el MISMO
-    // número y nunca se llame al RPC dos veces en el mismo envío.
-    const numeroReservado = await reservarNumeroOrden();
-    datos.numero = numeroReservado;
-    document.getElementById('numeroOrden').value = numeroReservado;
-    document.getElementById('displayNumero').textContent = numeroReservado;
+  // Actualizar número en pantalla inmediatamente
+  document.getElementById('numeroOrden').value = numeroReservado;
+  document.getElementById('displayNumero').textContent = numeroReservado;
 
-    mostrarToast('⏳ Generando PDF...');
-    const doc = await generarPDFBlob();
-    const pdfBlob = doc.output('blob');
-    const fileName = `OrdenPedido_CasaDams_${datos.numero.replace('/','_')}_${Date.now()}.pdf`;
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 2 — Leer todos los datos del formulario (DESPUÉS de actualizar número)
+  // ─────────────────────────────────────────────────────────────────────────
+  const datos = getDatos(); // ahora datos.numero ya tiene el número reservado
+  const chatId = numero + '@c.us';
+  const limpiarNum = v => parseMonto(v || '0');
 
-    mostrarToast('⏳ Subiendo PDF...');
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`, {
+  // Construir payload de Supabase desde el inicio — lo usaremos pase lo que pase
+  const payloadPedido = {
+    numero_orden: numeroReservado, op: numeroReservado,
+    cliente: datos.nombre||'', telefono: datos.tel||'',
+    telefono_opcional: datos.telOpcional||'',
+    cedula: datos.cc||'', direccion: datos.direccion||'',
+    ciudad: datos.ciudad||'', correo: datos.correo||'',
+    vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
+    fecha_orden: datos.fechaFactura||new Date().toISOString().split('T')[0],
+    fecha_vencimiento: datos.fechaVencimiento||null,
+    productos: getProductos(),
+    subtotal: limpiarNum(datos.total),
+    valor_total: limpiarNum(datos.total),
+    abono: getTotalAbonos(),
+    saldo_pendiente: limpiarNum(datos.saldo),
+    pdf_url: '',       // se actualiza si el upload fue bien
+    enviado_whatsapp: false, // se actualiza si WA fue bien
+    notas: datos.son||''
+  };
+
+  // Helper: intentar guardar en Supabase con 3 reintentos
+  const intentarGuardar = async (payload) => {
+    const ejecutar = () => fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
       method: 'POST',
-      headers: { 'Authorization':'Bearer '+SUPABASE_KEY, 'apikey':SUPABASE_KEY, 'Content-Type':'application/pdf' },
-      body: pdfBlob
+      headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify(payload)
     });
-    const pdfLink = uploadRes.ok ? `${SUPABASE_URL}/storage/v1/object/public/ordenes/${fileName}` : '';
+    for (let intento = 1; intento <= 3; intento++) {
+      try {
+        const r = await ejecutar();
+        if (r.ok) return true;
+        const txt = await r.text();
+        console.warn(`Intento ${intento} de guardado falló (${r.status}):`, txt);
+      } catch(eNet) {
+        console.warn(`Intento ${intento} de guardado — error de red:`, eNet);
+      }
+      if (intento < 3) await new Promise(r => setTimeout(r, 1500));
+    }
+    return false;
+  };
 
-    mostrarToast('⏳ Enviando por WhatsApp...');
-    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola ${datos.nombre||'cliente'}, aquí está su orden de pedido N° ${datos.numero}:\n\n${pdfLink?`📄 ${pdfLink}`:'(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+  // Helper: guardar respaldo local como última red de seguridad
+  const guardarRespaldoLocal = (payload) => {
+    try {
+      const pendientes = JSON.parse(localStorage.getItem('casadams_ordenes_pendientes') || '[]');
+      pendientes.push({ payload, fecha_guardado: new Date().toISOString() });
+      localStorage.setItem('casadams_ordenes_pendientes', JSON.stringify(pendientes));
+    } catch(e) { console.error('No se pudo guardar respaldo local:', e); }
+  };
 
-    const res = await fetch('/api/waha', {
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 3 — Generar PDF
+  // Si falla, guardamos la orden en Supabase sin PDF (mejor tener el registro
+  // que no tener nada). El número ya fue reservado, hay que guardar sí o sí.
+  // ─────────────────────────────────────────────────────────────────────────
+  mostrarToast('⏳ Generando PDF...');
+  let pdfBlob = null, fileName = '', pdfLink = '';
+  try {
+    const doc = await generarPDFBlob();
+    pdfBlob = doc.output('blob');
+    fileName = `OrdenPedido_CasaDams_${numeroReservado.replace('/','_')}_${Date.now()}.pdf`;
+  } catch(ePdf) {
+    console.error('Error generando PDF:', ePdf);
+    mostrarToast('⚠️ Error al generar PDF — guardando orden sin PDF...');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 4 — Subir PDF a Supabase Storage (solo si se generó)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (pdfBlob) {
+    mostrarToast('⏳ Subiendo PDF...');
+    try {
+      const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`, {
+        method: 'POST',
+        headers: { 'Authorization':'Bearer '+SUPABASE_KEY, 'apikey':SUPABASE_KEY, 'Content-Type':'application/pdf' },
+        body: pdfBlob
+      });
+      if (uploadRes.ok) {
+        pdfLink = `${SUPABASE_URL}/storage/v1/object/public/ordenes/${fileName}`;
+        payloadPedido.pdf_url = pdfLink;
+      } else {
+        console.warn('Upload PDF falló:', uploadRes.status, await uploadRes.text());
+      }
+    } catch(eUp) {
+      console.warn('Upload PDF — error de red:', eUp);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 5 — Guardar en Supabase (SIEMPRE, independiente de WA y PDF)
+  // El número ya fue reservado — la orden DEBE quedar en el historial.
+  // ─────────────────────────────────────────────────────────────────────────
+  mostrarToast('⏳ Guardando orden...');
+  const guardadoOk = await intentarGuardar(payloadPedido);
+  if (!guardadoOk) {
+    guardarRespaldoLocal(payloadPedido);
+    console.error('No se pudo guardar la orden en Supabase tras 3 intentos.');
+    alert(`⚠️ ATENCIÓN: la orden ${numeroReservado} de ${datos.nombre||'cliente'} NO se guardó en el historial tras 3 intentos.\n\nQuedó respaldada en este navegador. No cierres esta pestaña y avisa a Chispi para insertarla manualmente.`);
+    mostrarToast('⚠️ Error crítico: orden no guardada en historial');
+    if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
+    return;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PASO 6 — Enviar WhatsApp (DESPUÉS de guardar — si falla, la orden ya existe)
+  // ─────────────────────────────────────────────────────────────────────────
+  mostrarToast('⏳ Enviando por WhatsApp...');
+  const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola ${datos.nombre||'cliente'}, aquí está su orden de pedido N° ${numeroReservado}:\n\n${pdfLink?`📄 ${pdfLink}`:'(PDF no disponible)'}\n\n✅ Gracias por su compra.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+  let waOk = false;
+  try {
+    const resWa = await fetch('/api/waha', {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ endpoint:'/api/sendText', payload:{ session:WAHA_SESSION, chatId, text:mensaje } })
     });
-
-    if (res.ok) {
-      mostrarToast('⏳ Guardando orden...');
-      const limpiarNum = v => parseMonto(v || '0');
-      const payloadPedido = {
-          numero_orden: numeroReservado, op: numeroReservado,
-          cliente: datos.nombre||'', telefono: datos.tel||'',
-          telefono_opcional: datos.telOpcional||'',
-          cedula: datos.cc||'', direccion: datos.direccion||'',
-          ciudad: datos.ciudad||'', correo: datos.correo||'',
-          vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
-          fecha_orden: datos.fechaFactura||new Date().toISOString().split('T')[0],
-          fecha_vencimiento: datos.fechaVencimiento||null,
-          productos: getProductos(),
-          subtotal: limpiarNum(datos.total),
-          valor_total: limpiarNum(datos.total),
-          abono: getTotalAbonos(),
-          saldo_pendiente: limpiarNum(datos.saldo),
-          pdf_url: pdfLink||'', enviado_whatsapp: true,
-          notas: datos.son||''
-      };
-
-      // guardarPedido reutiliza el mismo payload con el mismo numeroReservado — nunca llama al RPC de nuevo
-      const guardarPedido = () => fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
-        body: JSON.stringify(payloadPedido)
-      });
-
-      let resSupabase = await guardarPedido();
-
-      // Reintento automático: usa el MISMO payload (mismo número), nunca pide uno nuevo
-      if (!resSupabase.ok) {
-        console.warn('Primer intento de guardado falló, reintentando en 1.5s...');
-        await new Promise(r => setTimeout(r, 1500));
-        resSupabase = await guardarPedido();
-      }
-
-      if (!resSupabase.ok) {
-        const errTxt = await resSupabase.text();
-        console.error('Supabase error tras reintento:', resSupabase.status, errTxt);
-
-        // Red de seguridad: guardar localmente para no perder la orden
-        try {
-          const pendientes = JSON.parse(localStorage.getItem('casadams_ordenes_pendientes') || '[]');
-          pendientes.push({ payload: payloadPedido, fecha_guardado: new Date().toISOString() });
-          localStorage.setItem('casadams_ordenes_pendientes', JSON.stringify(pendientes));
-        } catch(eLocal) { console.error('No se pudo guardar respaldo local:', eLocal); }
-
-        mostrarToast('⚠️ Error al guardar en historial');
-        alert(`⚠️ ATENCIÓN: la orden ${numeroReservado} de ${datos.nombre||'cliente'} se envió por WhatsApp pero NO se guardó en el historial.\n\nQuedó respaldada localmente en este navegador. Avisa a Chispi para insertarla manualmente en Supabase.\n\nNo cierres esta pestaña hasta confirmar que se resolvió.`);
-      } else {
-        mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
-      }
-    } else { throw new Error('WAHA error'); }
-  } catch(e) {
-    console.error(e);
-    mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
-  } finally {
-    if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
+    waOk = resWa.ok;
+    if (!waOk) console.warn('WAHA respondió con error:', resWa.status);
+  } catch(eWa) {
+    console.warn('WAHA no respondió (red o ngrok caído):', eWa);
   }
+
+  // Actualizar flag enviado_whatsapp en Supabase si WA funcionó
+  if (waOk) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/pedidos?numero_orden=eq.${encodeURIComponent(numeroReservado)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+        body: JSON.stringify({ enviado_whatsapp: true })
+      });
+    } catch(e) { /* no crítico */ }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RESULTADO FINAL — la orden siempre quedó guardada en este punto
+  // ─────────────────────────────────────────────────────────────────────────
+  if (waOk) {
+    mostrarToast(pdfLink ? '✅ Orden guardada y enviada con PDF' : '✅ Orden guardada y enviada');
+  } else {
+    mostrarToast('✅ Orden guardada — WhatsApp no disponible, reenvía desde el historial');
+    alert(`ℹ️ La orden ${numeroReservado} de ${datos.nombre||'cliente'} quedó guardada en el historial.\n\nEl mensaje de WhatsApp no se pudo enviar (verifica que WAHA/ngrok esté activo).\nPuedes reenviarlo desde el botón "Editar" en el historial.`);
+  }
+
+  if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
 }
 
 async function reservarNumeroOrden() {
-  try {
-    // Llama a la función atómica en Supabase: incrementa y devuelve el
-    // nuevo valor en una sola operación de base de datos, sin posibilidad
-    // de que dos pestañas/dispositivos reciban el mismo número.
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/siguiente_consecutivo`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY },
-      body: JSON.stringify({ clave_param: 'orden' })
-    });
-    if (!res.ok) throw new Error('RPC siguiente_consecutivo falló: ' + res.status);
-    const nuevoValor = await res.json(); // la función devuelve directamente el integer
-    numeroOrdenActual = nuevoValor;
-    return formatNumOrden(nuevoValor);
-  } catch(e) {
-    console.error('No se pudo reservar número de orden atómicamente:', e);
-    // Fallback: si Supabase falla, usamos el número que ya estaba mostrado
-    // (mejor enviar con riesgo de repetido que no poder enviar nada).
-    mostrarToast('⚠️ No se pudo verificar el consecutivo, revisa el número luego');
-    return document.getElementById('numeroOrden').value || formatNumOrden(numeroOrdenActual);
-  }
+  // Llama a la función atómica en Supabase: incrementa y devuelve el nuevo
+  // valor en una sola operación. Sin fallback local — si falla, se lanza
+  // excepción para que enviarWhatsApp aborte ANTES de consumir el consecutivo.
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/siguiente_consecutivo`, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY },
+    body: JSON.stringify({ clave_param: 'orden' })
+  });
+  if (!res.ok) throw new Error('RPC siguiente_consecutivo falló: ' + res.status);
+  const nuevoValor = await res.json(); // la función devuelve directamente el integer
+  if (!nuevoValor || typeof nuevoValor !== 'number') throw new Error('RPC devolvió valor inválido: ' + nuevoValor);
+  numeroOrdenActual = nuevoValor;
+  return formatNumOrden(nuevoValor);
 }
 
 // ========================
@@ -2044,22 +2112,40 @@ async function registrarAbono(ordenId) {
   if (!medio) { status.textContent='⚠️ Selecciona el medio de pago'; status.style.color='var(--red)'; return; }
   if (monto<=0) { status.textContent='⚠️ Ingresa un monto válido'; status.style.color='var(--red)'; return; }
 
+  // Candado anti doble-clic
+  const btnAbono = document.querySelector(`button[onclick="registrarAbono('${ordenId}')"]`);
+  if (btnAbono && btnAbono.disabled) return;
+  if (btnAbono) { btnAbono.disabled = true; btnAbono.textContent = '⏳ Guardando...'; }
+
   const o = todasLasOrdenes.find(x=>x.id===ordenId);
-  if (!o) return;
+  if (!o) { if(btnAbono){btnAbono.disabled=false;btnAbono.textContent='✅ Registrar abono y notificar cliente';} return; }
+
   const nuevoAbono = (o.abono||0) + monto;
   const nuevoSaldo = (o.valor_total||0) - nuevoAbono;
 
-  status.textContent='⏳ Guardando...'; status.style.color='var(--warm-gray)';
+  // ── PASO 1: Actualizar saldo en pedidos (con reintento) ──
+  status.textContent='⏳ Guardando abono...'; status.style.color='var(--warm-gray)';
+  let updateOk = false;
+  for (let i = 1; i <= 3; i++) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
+        body:JSON.stringify({ abono:nuevoAbono, saldo_pendiente:nuevoSaldo>=0?nuevoSaldo:0 })
+      });
+      if (r.ok) { updateOk = true; break; }
+      console.warn(`Intento ${i} PATCH pedidos falló:`, r.status);
+    } catch(e) { console.warn(`Intento ${i} PATCH pedidos — red:`, e); }
+    if (i < 3) await new Promise(r => setTimeout(r, 1200));
+  }
+  if (!updateOk) {
+    status.textContent='❌ Error al guardar el abono. Intenta de nuevo.';
+    status.style.color='var(--red)';
+    if(btnAbono){btnAbono.disabled=false;btnAbono.textContent='✅ Registrar abono y notificar cliente';}
+    return;
+  }
 
-  const resUpdate = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
-    method:'PATCH',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
-    body:JSON.stringify({ abono:nuevoAbono, saldo_pendiente:nuevoSaldo>=0?nuevoSaldo:0 })
-  });
-
-  if (!resUpdate.ok) { status.textContent='❌ Error al guardar.'; status.style.color='var(--red)'; return; }
-
-  // Generar y subir PDF comprobante
+  // ── PASO 2: Generar y subir PDF comprobante ──
   status.textContent='⏳ Generando comprobante...'; status.style.color='var(--warm-gray)';
   let comprobanteLink = '';
   try {
@@ -2072,9 +2158,40 @@ async function registrarAbono(ordenId) {
       body: compBlob
     });
     if (uploadRes.ok) comprobanteLink = `${SUPABASE_URL}/storage/v1/object/public/ordenes/${compFileName}`;
-  } catch(e) { console.warn('Error generando comprobante:', e); }
+    else console.warn('Upload comprobante falló:', uploadRes.status);
+  } catch(e) { console.warn('Error generando/subiendo comprobante:', e); }
 
-  // Enviar WhatsApp
+  // ── PASO 3: Guardar registro en tabla abonos (con reintento) ──
+  const payloadAbono = {
+    pedido_id: o.id,
+    numero_orden: String(o.numero_orden || o.op || ''),
+    cliente: o.cliente || '',
+    monto: monto,
+    medio: medio,
+    nuevo_abono: nuevoAbono,
+    nuevo_saldo: Math.max(nuevoSaldo, 0),
+    comprobante_url: comprobanteLink || ''
+  };
+  let abonoInsertOk = false;
+  for (let i = 1; i <= 3; i++) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/abonos`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
+        body: JSON.stringify(payloadAbono)
+      });
+      if (r.ok) { abonoInsertOk = true; break; }
+      console.warn(`Intento ${i} INSERT abonos falló:`, r.status, await r.text());
+    } catch(e) { console.warn(`Intento ${i} INSERT abonos — red:`, e); }
+    if (i < 3) await new Promise(r => setTimeout(r, 1200));
+  }
+  if (!abonoInsertOk) {
+    // El saldo ya fue actualizado en pedidos — avisar pero no bloquear
+    console.error('No se pudo insertar en tabla abonos tras 3 intentos', payloadAbono);
+    mostrarToast('⚠️ Abono guardado en la orden pero el comprobante no quedó en el historial de abonos');
+  }
+
+  // ── PASO 4: Enviar WhatsApp (no bloquea si falla) ──
   status.textContent='⏳ Notificando al cliente...'; status.style.color='var(--warm-gray)';
   const telefono = (o.telefono||'').replace(/\D/g,'');
   if (telefono) {
@@ -2095,31 +2212,17 @@ ${estadoPago}${comprobanteLink ? '\n\n📄 Comprobante: ' + comprobanteLink : ''
 ✅ Gracias por tu pago.
 📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería
 📞 321 540 0839`;
-    await fetch('/api/waha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendText',payload:{session:'default',chatId,text:mensaje}})});
+    try {
+      await fetch('/api/waha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendText',payload:{session:'default',chatId,text:mensaje}})});
+    } catch(eWa) { console.warn('WhatsApp abono no enviado:', eWa); }
   }
 
-  // Guardar abono individual en tabla abonos
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/abonos`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
-      body: JSON.stringify({
-        pedido_id: o.id,
-        numero_orden: String(o.numero_orden || o.op || ''),
-        cliente: o.cliente || '',
-        monto: monto,
-        medio: medio,
-        nuevo_abono: nuevoAbono,
-        nuevo_saldo: Math.max(nuevoSaldo, 0),
-        comprobante_url: comprobanteLink || ''
-      })
-    });
-  } catch(e) { console.warn('Error guardando abono:', e); }
-
+  // ── RESULTADO ──
   o.abono = nuevoAbono;
   o.saldo_pendiente = nuevoSaldo>=0?nuevoSaldo:0;
   status.textContent = '✅ Abono registrado y comprobante enviado';
   status.style.color = 'var(--green)';
+  if(btnAbono){btnAbono.disabled=false;btnAbono.textContent='✅ Registrar abono y notificar cliente';}
   setTimeout(()=>{ cerrarDetalle(); cargarHistorial(); }, 1800);
 }
 
