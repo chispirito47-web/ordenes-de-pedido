@@ -1049,7 +1049,8 @@ window.onload = async () => {
     }
   } catch(e) { /* noop */ }
 
-  // Leer consecutivo desde Supabase (tabla consecutivos, clave 'orden')
+  // Solo leemos para mostrar el preview (NO consume el consecutivo).
+  // El número real se reserva atómicamente al enviar con el RPC.
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -1063,10 +1064,8 @@ window.onload = async () => {
   } catch(e) {
     numeroOrdenActual = 1;
   }
-
-  const formatted = formatNumOrden(numeroOrdenActual);
-  document.getElementById('numeroOrden').value = formatted;
-  document.getElementById('displayNumero').textContent = formatted;
+  document.getElementById('numeroOrden').value = formatNumOrden(numeroOrdenActual);
+  document.getElementById('displayNumero').textContent = formatNumOrden(numeroOrdenActual);
 
   agregarFila(); agregarFila(); agregarFila();
   initFirma('firmaComprador');
@@ -1553,24 +1552,25 @@ async function enviarWhatsApp() {
 
   // --- Candado anti doble-clic / doble envío ---
   const btnEnviar = document.getElementById('btnEnviarWA');
-  if (btnEnviar && btnEnviar.disabled) return; // ya hay un envío en curso, ignorar clics extra
+  if (btnEnviar && btnEnviar.disabled) return;
   if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
 
   cerrarModal();
-  mostrarToast('⏳ Generando PDF...');
+  mostrarToast('⏳ Reservando número de orden...');
   try {
     const datos = getDatos();
     const chatId = numero + '@c.us';
 
-    // --- Reservar el número de orden ANTES de generar/enviar nada ---
-    // Usa una función atómica en Supabase (siguiente_consecutivo) para que,
-    // aunque haya varias pestañas/dispositivos abiertos al mismo tiempo,
-    // cada uno reciba un número distinto y nunca se repita.
-    const numeroReal = await reservarNumeroOrden();
-    datos.numero = numeroReal; // sobreescribe el número "provisional" mostrado al abrir la página
-    document.getElementById('numeroOrden').value = numeroReal;
-    document.getElementById('displayNumero').textContent = numeroReal;
+    // --- Reservar número UNA SOLA VEZ al inicio ---
+    // El RPC es atómico: aunque haya varios dispositivos, cada uno recibe un número único.
+    // Guardamos el número en numeroReservado para que cualquier reintento use el MISMO
+    // número y nunca se llame al RPC dos veces en el mismo envío.
+    const numeroReservado = await reservarNumeroOrden();
+    datos.numero = numeroReservado;
+    document.getElementById('numeroOrden').value = numeroReservado;
+    document.getElementById('displayNumero').textContent = numeroReservado;
 
+    mostrarToast('⏳ Generando PDF...');
     const doc = await generarPDFBlob();
     const pdfBlob = doc.output('blob');
     const fileName = `OrdenPedido_CasaDams_${datos.numero.replace('/','_')}_${Date.now()}.pdf`;
@@ -1596,7 +1596,7 @@ async function enviarWhatsApp() {
       mostrarToast('⏳ Guardando orden...');
       const limpiarNum = v => parseMonto(v || '0');
       const payloadPedido = {
-          numero_orden: datos.numero, op: datos.numero,
+          numero_orden: numeroReservado, op: numeroReservado,
           cliente: datos.nombre||'', telefono: datos.tel||'',
           telefono_opcional: datos.telOpcional||'',
           cedula: datos.cc||'', direccion: datos.direccion||'',
@@ -1613,6 +1613,7 @@ async function enviarWhatsApp() {
           notas: datos.son||''
       };
 
+      // guardarPedido reutiliza el mismo payload con el mismo numeroReservado — nunca llama al RPC de nuevo
       const guardarPedido = () => fetch(`${SUPABASE_URL}/rest/v1/pedidos`, {
         method: 'POST',
         headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
@@ -1621,7 +1622,7 @@ async function enviarWhatsApp() {
 
       let resSupabase = await guardarPedido();
 
-      // --- Reintento automático: un fallo de red/timeout no debe perder la orden ---
+      // Reintento automático: usa el MISMO payload (mismo número), nunca pide uno nuevo
       if (!resSupabase.ok) {
         console.warn('Primer intento de guardado falló, reintentando en 1.5s...');
         await new Promise(r => setTimeout(r, 1500));
@@ -1632,7 +1633,7 @@ async function enviarWhatsApp() {
         const errTxt = await resSupabase.text();
         console.error('Supabase error tras reintento:', resSupabase.status, errTxt);
 
-        // --- Red de seguridad: guardar localmente para no perder la orden ---
+        // Red de seguridad: guardar localmente para no perder la orden
         try {
           const pendientes = JSON.parse(localStorage.getItem('casadams_ordenes_pendientes') || '[]');
           pendientes.push({ payload: payloadPedido, fecha_guardado: new Date().toISOString() });
@@ -1640,8 +1641,7 @@ async function enviarWhatsApp() {
         } catch(eLocal) { console.error('No se pudo guardar respaldo local:', eLocal); }
 
         mostrarToast('⚠️ Error al guardar en historial');
-        // Alerta bloqueante: el toast desaparece solo y esto no se puede pasar por alto
-        alert(`⚠️ ATENCIÓN: la orden ${datos.numero} de ${datos.nombre||'cliente'} se envió por WhatsApp pero NO se guardó en el historial.\n\nQuedó respaldada localmente en este navegador. Avisa a Chispi para insertarla manualmente en Supabase.\n\nNo cierres esta pestaña hasta confirmar que se resolvió.`);
+        alert(`⚠️ ATENCIÓN: la orden ${numeroReservado} de ${datos.nombre||'cliente'} se envió por WhatsApp pero NO se guardó en el historial.\n\nQuedó respaldada localmente en este navegador. Avisa a Chispi para insertarla manualmente en Supabase.\n\nNo cierres esta pestaña hasta confirmar que se resolvió.`);
       } else {
         mostrarToast(pdfLink ? '✅ Orden enviada con PDF' : '✅ Mensaje enviado');
       }
@@ -1650,7 +1650,6 @@ async function enviarWhatsApp() {
     console.error(e);
     mostrarToast('⚠️ Error al enviar. Verifica que WAHA esté activo.');
   } finally {
-    // Siempre liberar el botón al terminar, sea éxito o error
     if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
   }
 }
@@ -1683,7 +1682,8 @@ async function reservarNumeroOrden() {
 // ========================
 function limpiarTodo() {
   if (!confirm('¿Crear nueva orden? Se perderán los datos actuales.')) return;
-  // Leer consecutivo actualizado desde Supabase
+  // Solo leemos para mostrar el preview (NO consume el consecutivo).
+  // El número real se reserva atómicamente al enviar con el RPC.
   fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
     headers: { 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY }
   }).then(r=>r.json()).then(data=>{
@@ -1692,14 +1692,12 @@ function limpiarTodo() {
     } else {
       numeroOrdenActual = numeroOrdenActual + 1;
     }
-    const formatted = formatNumOrden(numeroOrdenActual);
-    document.getElementById('numeroOrden').value = formatted;
-    document.getElementById('displayNumero').textContent = formatted;
+    document.getElementById('numeroOrden').value = formatNumOrden(numeroOrdenActual);
+    document.getElementById('displayNumero').textContent = formatNumOrden(numeroOrdenActual);
   }).catch(()=>{
     numeroOrdenActual = numeroOrdenActual + 1;
-    const formatted = formatNumOrden(numeroOrdenActual);
-    document.getElementById('numeroOrden').value = formatted;
-    document.getElementById('displayNumero').textContent = formatted;
+    document.getElementById('numeroOrden').value = formatNumOrden(numeroOrdenActual);
+    document.getElementById('displayNumero').textContent = formatNumOrden(numeroOrdenActual);
   });
   document.getElementById('fechaFactura').value=new Date().toISOString().split('T')[0];
   document.getElementById('fechaVencimiento').value='';
