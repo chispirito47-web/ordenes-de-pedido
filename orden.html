@@ -1553,9 +1553,10 @@ async function enviarWhatsApp() {
   // --- Candado anti doble-clic / doble envío ---
   const btnEnviar = document.getElementById('btnEnviarWA');
   if (btnEnviar && btnEnviar.disabled) return;
-  if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...'; }
+  if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = '⏳ Enviando...'; }
 
-  cerrarModal();
+  // NO cerrar el modal todavía — el usuario ve que está procesando y no intenta enviar de nuevo.
+  // cerrarModal() se llama al FINAL, cuando todo terminó.
 
   // ─────────────────────────────────────────────────────────────────────────
   // PASO 1 — Reservar número atómico en Supabase
@@ -1569,6 +1570,7 @@ async function enviarWhatsApp() {
   } catch(e) {
     console.error('No se pudo reservar número:', e);
     mostrarToast('⚠️ No se pudo conectar con Supabase. Verifica internet e intenta de nuevo.');
+    cerrarModal();
     if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
     return; // Abortar completamente — consecutivo intacto
   }
@@ -1683,6 +1685,7 @@ async function enviarWhatsApp() {
     console.error('No se pudo guardar la orden en Supabase tras 3 intentos.');
     alert(`⚠️ ATENCIÓN: la orden ${numeroReservado} de ${datos.nombre||'cliente'} NO se guardó en el historial tras 3 intentos.\n\nQuedó respaldada en este navegador. No cierres esta pestaña y avisa a Chispi para insertarla manualmente.`);
     mostrarToast('⚠️ Error crítico: orden no guardada en historial');
+    cerrarModal();
     if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
     return;
   }
@@ -1719,6 +1722,10 @@ async function enviarWhatsApp() {
   // ─────────────────────────────────────────────────────────────────────────
   // RESULTADO FINAL — la orden siempre quedó guardada en este punto
   // ─────────────────────────────────────────────────────────────────────────
+  // Cerrar el modal AQUÍ — cuando todo ya terminó, no antes.
+  // Esto evita que el usuario piense que nada pasó y vuelva a enviar.
+  cerrarModal();
+
   if (waOk) {
     mostrarToast(pdfLink ? '✅ Orden guardada y enviada con PDF' : '✅ Orden guardada y enviada');
   } else {
