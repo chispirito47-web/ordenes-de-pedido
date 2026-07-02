@@ -1603,7 +1603,9 @@ async function enviarWhatsApp() {
     saldo_pendiente: limpiarNum(datos.saldo),
     pdf_url: '',       // se actualiza si el upload fue bien
     enviado_whatsapp: false, // se actualiza si WA fue bien
-    notas: datos.son||''
+    notas: datos.son||'',
+    firma_comprador: getFirmaDataURL('firmaComprador') || null,
+    firma_vendedor:  getFirmaDataURL('firmaVendedor')  || null,
   };
 
   // Helper: intentar guardar en Supabase con 3 reintentos
@@ -1722,7 +1724,7 @@ async function enviarWhatsApp() {
   // ─────────────────────────────────────────────────────────────────────────
   // RESULTADO FINAL — la orden siempre quedó guardada en este punto
   // ─────────────────────────────────────────────────────────────────────────
-  // Cerrar modal AQUÍ — cuando todo terminó, para que el usuario no reintente
+  // Cerrar modal AQUÍ — cuando todo terminó
   cerrarModal();
 
   if (waOk) {
@@ -2535,7 +2537,7 @@ async function guardarEdicion(silencioso) {
   // Actualizar objeto local
   Object.assign(o, { ...datos, productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo });
 
-  // Regenerar y subir PDF con los datos actualizados
+  // Regenerar y subir PDF con datos actualizados (incluye firmas guardadas)
   if (status) { status.textContent = '⏳ Actualizando PDF...'; }
   try {
     const pdfLink = await generarYSubirPDFEdicion(o, datos, productos);
@@ -2548,8 +2550,7 @@ async function guardarEdicion(silencioso) {
       o.pdf_url = pdfLink;
     }
   } catch(ePdf) {
-    console.warn('PDF no se pudo regenerar al guardar:', ePdf);
-    // No crítico — los datos ya se guardaron
+    console.warn('PDF no se pudo regenerar:', ePdf);
   }
 
   if (!silencioso) {
@@ -2560,7 +2561,8 @@ async function guardarEdicion(silencioso) {
   return true;
 }
 
-// Genera el PDF de edición y lo sube a Storage. Devuelve la URL pública o '' si falla.
+// Genera el PDF de edición con las firmas originales guardadas en Supabase y lo sube.
+// Devuelve la URL pública o '' si falla.
 async function generarYSubirPDFEdicion(o, datosEdit, prodEdit) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'letter' });
@@ -2665,8 +2667,7 @@ async function generarYSubirPDFEdicion(o, datosEdit, prodEdit) {
   const clausulaHE=8+totalLinesE*3.2;
 
   const espacioNecesarioE = 44 + clausulaHE + 4;
-  const pageHCheck2 = doc.internal.pageSize.getHeight();
-  if (y + espacioNecesarioE > pageHCheck2 - 10) { doc.addPage(); y = 15; }
+  if (y + espacioNecesarioE > doc.internal.pageSize.getHeight() - 10) { doc.addPage(); y = 15; }
 
   doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text('SON:',margin+2,y+4);
@@ -2676,19 +2677,15 @@ async function generarYSubirPDFEdicion(o, datosEdit, prodEdit) {
   if(sonLns[1])doc.text(sonLns[1],margin+14,y+7.5);
 
   const totX=margin+contentW*0.62,totW=contentW*0.38;
-  const totalesArr=[
-    {label:'ABONO $',value:formatPesos(abonoN),bg:[240,237,230]},
-    {label:'',value:'',bg:[245,242,235]},
-    {label:'SALDO $',value:formatPesos(saldoN),bg:[240,237,230]},
-    {label:'TOTAL $',value:formatPesos(totalFinal),bg:[28,26,23]},
-  ];
-  totalesArr.forEach((t,i)=>{
+  [{label:'ABONO $',value:formatPesos(abonoN),bg:[240,237,230]},
+   {label:'',value:'',bg:[245,242,235]},
+   {label:'SALDO $',value:formatPesos(saldoN),bg:[240,237,230]},
+   {label:'TOTAL $',value:formatPesos(totalFinal),bg:[28,26,23]}
+  ].forEach((t,i)=>{
     doc.setFillColor(...t.bg);doc.rect(totX,y+i*10,totW,10,'F');
     doc.setFont('helvetica','bold');doc.setFontSize(8);
-    doc.setTextColor(i===3?196:107,i===3?154:79,i===3?60:53);
-    doc.text(t.label,totX+4,y+i*10+6.5);
-    doc.setTextColor(i===3?196:28,i===3?154:26,i===3?60:23);
-    doc.text(t.value,totX+totW-4,y+i*10+6.5,{align:'right'});
+    doc.setTextColor(i===3?196:107,i===3?154:79,i===3?60:53);doc.text(t.label,totX+4,y+i*10+6.5);
+    doc.setTextColor(i===3?196:28,i===3?154:26,i===3?60:23);doc.text(t.value,totX+totW-4,y+i*10+6.5,{align:'right'});
     doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(totX,y+i*10,totW,10);
   });
   y+=44;
@@ -2705,21 +2702,26 @@ async function generarYSubirPDFEdicion(o, datosEdit, prodEdit) {
   });
   y+=clausulaHE+4;
 
-  // Firmas
-  const pageHF=doc.internal.pageSize.getHeight();
-  if(y+42>pageHF-10){doc.addPage();y=15;}
-  const firmaHE=38,firmaWE=contentW/2-5;
+  // Firmas — se recuperan de Supabase (guardadas al crear la orden)
+  if(y+42>doc.internal.pageSize.getHeight()-10){doc.addPage();y=15;}
+  const firmaHE=38, firmaWE=contentW/2-5;
+
+  // Comprador
   doc.setFillColor(240,237,230);doc.rect(margin,y,firmaWE,firmaHE,'F');
   doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,firmaWE,firmaHE);
   doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);doc.rect(margin+2,y+2,30,10,'S');
   doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
   doc.text('ACEPTADA',margin+17,y+9,{align:'center'});
+  if(o.firma_comprador) doc.addImage(o.firma_comprador,'PNG',margin+2,y+13,firmaWE-4,18);
   doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(margin+4,y+firmaHE-6,margin+firmaWE-4,y+firmaHE-6);
   doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
   doc.text('FIRMA Y C.C. DEL COMPRADOR',margin+firmaWE/2,y+firmaHE-2,{align:'center'});
+
+  // Vendedor
   const firmaVXE=margin+firmaWE+10;
   doc.setFillColor(240,237,230);doc.rect(firmaVXE,y,firmaWE,firmaHE,'F');
   doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(firmaVXE,y,firmaWE,firmaHE);
+  if(o.firma_vendedor) doc.addImage(o.firma_vendedor,'PNG',firmaVXE+2,y+5,firmaWE-4,24);
   doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(firmaVXE+4,y+firmaHE-6,firmaVXE+firmaWE-4,y+firmaHE-6);
   doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
   doc.text('FIRMA DEL VENDEDOR',firmaVXE+firmaWE/2,y+firmaHE-2,{align:'center'});
@@ -2739,7 +2741,7 @@ async function guardarYReenviar() {
   const status = document.getElementById('editStatus');
   if (status) { status.textContent = '⏳ Guardando y generando PDF...'; status.style.color = 'var(--warm-gray)'; }
 
-  const ok = await guardarEdicion(true); // guarda datos + regenera PDF
+  const ok = await guardarEdicion(true); // guarda datos + regenera PDF con firmas
   if (!ok) return;
 
   const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
