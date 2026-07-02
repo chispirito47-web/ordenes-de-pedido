@@ -1555,8 +1555,8 @@ async function enviarWhatsApp() {
   if (btnEnviar && btnEnviar.disabled) return;
   if (btnEnviar) { btnEnviar.disabled = true; btnEnviar.textContent = '⏳ Enviando...'; }
 
-  // NO cerrar el modal todavía — el usuario ve que está procesando y no intenta enviar de nuevo.
-  // cerrarModal() se llama al FINAL, cuando todo terminó.
+  // NO cerrar el modal todavía — el usuario ve que está procesando y no intenta reenviar.
+  // cerrarModal() se llama al FINAL cuando todo terminó.
 
   // ─────────────────────────────────────────────────────────────────────────
   // PASO 1 — Reservar número atómico en Supabase
@@ -1722,8 +1722,7 @@ async function enviarWhatsApp() {
   // ─────────────────────────────────────────────────────────────────────────
   // RESULTADO FINAL — la orden siempre quedó guardada en este punto
   // ─────────────────────────────────────────────────────────────────────────
-  // Cerrar el modal AQUÍ — cuando todo ya terminó, no antes.
-  // Esto evita que el usuario piense que nada pasó y vuelva a enviar.
+  // Cerrar modal AQUÍ — cuando todo terminó, para que el usuario no reintente
   cerrarModal();
 
   if (waOk) {
@@ -2506,7 +2505,7 @@ async function guardarEdicion(silencioso) {
   const datos = getEditDatos();
   const productos = getEditProductos();
   const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
-  if (!o) return;
+  if (!o) return false;
 
   const totalNum = productos.reduce((acc, p) => {
     const qty = parseFloat(p.qty) || 0;
@@ -2520,251 +2519,256 @@ async function guardarEdicion(silencioso) {
     method: 'PATCH',
     headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
     body: JSON.stringify({
-      cliente:       datos.cliente,
-      telefono:      datos.telefono,
-      telefono_opcional: datos.telefono_opcional,
-      cedula:        datos.cedula,
-      ciudad:        datos.ciudad,
-      direccion:     datos.direccion,
-      metodo_pago:   datos.metodo_pago,
-      vendedor:      datos.vendedor,
-      productos:     productos,
-      valor_total:   totalNum,
-      saldo_pendiente: nuevoSaldo,
+      cliente: datos.cliente, telefono: datos.telefono,
+      telefono_opcional: datos.telefono_opcional, cedula: datos.cedula,
+      ciudad: datos.ciudad, direccion: datos.direccion,
+      metodo_pago: datos.metodo_pago, vendedor: datos.vendedor,
+      productos: productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo,
     })
   });
-
-  // Actualizar objeto local
-  Object.assign(o, { ...datos, productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo });
 
   if (!res.ok) {
     if (status) { status.textContent = '❌ Error al guardar'; status.style.color = 'var(--red)'; }
     return false;
   }
+
+  // Actualizar objeto local
+  Object.assign(o, { ...datos, productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo });
+
+  // Regenerar y subir PDF con los datos actualizados
+  if (status) { status.textContent = '⏳ Actualizando PDF...'; }
+  try {
+    const pdfLink = await generarYSubirPDFEdicion(o, datos, productos);
+    if (pdfLink) {
+      await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+        body: JSON.stringify({ pdf_url: pdfLink })
+      });
+      o.pdf_url = pdfLink;
+    }
+  } catch(ePdf) {
+    console.warn('PDF no se pudo regenerar al guardar:', ePdf);
+    // No crítico — los datos ya se guardaron
+  }
+
   if (!silencioso) {
-    if (status) { status.textContent = '✅ Cambios guardados'; status.style.color = 'var(--green)'; }
-    mostrarToast('✅ Orden actualizada');
+    if (status) { status.textContent = '✅ Cambios guardados y PDF actualizado'; status.style.color = 'var(--green)'; }
+    mostrarToast('✅ Orden y PDF actualizados');
     setTimeout(() => { cerrarEditar(); cargarHistorial(); }, 1500);
   }
   return true;
+}
+
+// Genera el PDF de edición y lo sube a Storage. Devuelve la URL pública o '' si falla.
+async function generarYSubirPDFEdicion(o, datosEdit, prodEdit) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'letter' });
+  const W = 215.9, margin = 15, contentW = W - margin*2;
+  const numOrden = o.numero_orden || o.op || '—';
+
+  // Header
+  doc.setFillColor(28,26,23); doc.rect(0,0,W,38,'F');
+  doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.text('CASA DAMS',margin,14);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(158,148,136);
+  doc.text('Muebles Nacionales e Importados',margin,19);
+  doc.text('Cra. 4 N° 49-71 B/Los Laureles 2. Montería - Córdoba',margin,24);
+  doc.text('Cel. 321 540 0839  |  casadams2015@gmail.com',margin,29);
+  doc.setFillColor(196,154,60); doc.roundedRect(W-60,8,46,22,3,3,'F');
+  doc.setTextColor(28,26,23); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('ORDEN DE PEDIDO',W-37,14,{align:'center'}); doc.setFontSize(16);
+  doc.text('N° '+numOrden,W-37,22,{align:'center'});
+
+  let y = 44;
+  // Fechas
+  doc.setDrawColor(212,201,184); doc.setLineWidth(0.3); doc.rect(margin,y,contentW,14);
+  const col = contentW/3;
+  doc.setFillColor(240,237,230); doc.rect(margin,y,contentW,6,'F');
+  const headers3=['FECHA DE FACTURA','FORMA DE PAGO','FECHA DE VENCIMIENTO'];
+  const fechaOrden = o.fecha_orden || '';
+  const fechaVenc  = o.fecha_vencimiento || '';
+  const values3=[
+    fechaOrden ? fechaOrden.split('-').reverse().join('/') : '—',
+    datosEdit.metodo_pago || '—',
+    fechaVenc  ? fechaVenc.split('-').reverse().join('/') : '—'
+  ];
+  headers3.forEach((h,i)=>{
+    const x=margin+col*i+col/2;
+    if(i>0){doc.setDrawColor(212,201,184);doc.line(margin+col*i,y,margin+col*i,y+14);}
+    doc.setTextColor(107,79,53);doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.text(h,x,y+4,{align:'center'});
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);doc.text(values3[i],x,y+11,{align:'center'});
+  });
+  y+=18;
+
+  const drawFieldE=(label,value,x,fy,w)=>{
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text(label+':',x,fy-1);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(28,26,23);doc.text(value||'—',x,fy+5);
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.line(x,fy+7,x+w,fy+7);
+  };
+  drawFieldE('SEÑORES',datosEdit.cliente,margin,y,contentW); y+=12;
+  drawFieldE('DIRECCIÓN',datosEdit.direccion,margin,y,contentW*0.55);
+  drawFieldE('CIUDAD',datosEdit.ciudad,margin+contentW*0.6,y,contentW*0.4); y+=12;
+  drawFieldE('NIT/C.C.',datosEdit.cedula,margin,y,contentW*0.3);
+  drawFieldE('TEL.',datosEdit.telefono,margin+contentW*0.35,y,contentW*0.25);
+  drawFieldE('CORREO',o.correo||'',margin+contentW*0.65,y,contentW*0.35); y+=16;
+
+  // Tabla productos
+  const colWidths2=[18,contentW-18-32-38-38,32,38,38];
+  const colX2=[margin,margin+18,margin+18+colWidths2[1],margin+18+colWidths2[1]+32,margin+18+colWidths2[1]+32+38];
+  const colHeaders2=['CANT.','DESCRIPCIÓN','REF.','VR. UNITARIO','SUBTOTAL'];
+  doc.setFillColor(28,26,23); doc.rect(margin,y,contentW,8,'F');
+  doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+  colHeaders2.forEach((h,i)=>{ doc.text(h,colX2[i]+colWidths2[i]/2,y+5.5,{align:'center'}); });
+  y+=8;
+
+  const rowMinH2=8;
+  const filasAP=prodEdit.length + 2;
+  for(let i=0;i<filasAP;i++){
+    const p=prodEdit[i]||{};
+    const descLines2=p.desc?doc.splitTextToSize(p.desc,colWidths2[1]-4):[''];
+    const rowH2=Math.max(rowMinH2,descLines2.length*4.5+3.5);
+    const pageH3=doc.internal.pageSize.getHeight();
+    if(y+rowH2>pageH3-10){doc.addPage();y=15;}
+    const bg=i%2===0?[253,252,249]:[245,240,232];
+    doc.setFillColor(...bg);doc.rect(margin,y,contentW,rowH2,'F');
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.2);doc.line(margin,y+rowH2,margin+contentW,y+rowH2);
+    colX2.forEach((cx,ci)=>{if(ci>0)doc.line(cx,y,cx,y+rowH2);});
+    if(p.qty||p.desc){
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);
+      doc.text(String(p.qty),colX2[0]+colWidths2[0]/2,y+rowH2/2+1.5,{align:'center'});
+      doc.setFontSize(8.5);doc.text(descLines2,colX2[1]+2,y+4.5);
+      doc.setFontSize(8);doc.setTextColor(107,79,53);
+      if(p.ref)doc.text(String(p.ref),colX2[2]+colWidths2[2]/2,y+rowH2/2+1.5,{align:'center'});
+      doc.setTextColor(28,26,23);doc.setFontSize(9);
+      doc.text(p.price||'',colX2[3]+colWidths2[3]-2,y+rowH2/2+1.5,{align:'right'});
+      doc.setFont('helvetica','bold');doc.text(p.sub,colX2[4]+colWidths2[4]-2,y+rowH2/2+1.5,{align:'right'});
+    }
+    y+=rowH2;
+  }
+  y+=4;
+
+  // Totales
+  const totalFinal = prodEdit.reduce((acc,p)=>{const q=parseFloat(p.qty)||0;return acc+q*parseMonto(p.price);},0);
+  const abonoN = o.abono || 0;
+  const saldoN = Math.max(totalFinal - abonoN, 0);
+  const sonLetras = numeroALetras(Math.floor(totalFinal)) + ' PESOS M/CTE';
+
+  const clausulaTextE=[
+    '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
+    '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
+    '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.',
+    '4. CASA DAMS S.A.S se compromete a fabricar el o los muebles descritos en la orden de Pedido con un abono inicial del 50%. El saldo se cancelará en cuanto sea notificado al cliente que el mueble se encuentra listo para su entrega final. Si llegada la fecha de entrega del producto, el cliente no ha cancelado en su totalidad el saldo restante, se dará un plazo máximo de 20 días para cancelar, de lo contrario se cobrará un 5% adicional del valor del saldo por incumplimiento.'
+  ];
+  doc.setFontSize(5.8);
+  let totalLinesE=0;
+  clausulaTextE.forEach(c=>{ totalLinesE+=doc.splitTextToSize(c,contentW-6).length+0.5; });
+  const clausulaHE=8+totalLinesE*3.2;
+
+  const espacioNecesarioE = 44 + clausulaHE + 4;
+  const pageHCheck2 = doc.internal.pageSize.getHeight();
+  if (y + espacioNecesarioE > pageHCheck2 - 10) { doc.addPage(); y = 15; }
+
+  doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text('SON:',margin+2,y+4);
+  doc.setFont('helvetica','italic');doc.setFontSize(7);doc.setTextColor(28,26,23);
+  const sonLns=doc.splitTextToSize(sonLetras,contentW*0.6-16);
+  doc.text(sonLns[0]||'',margin+14,y+3.5);
+  if(sonLns[1])doc.text(sonLns[1],margin+14,y+7.5);
+
+  const totX=margin+contentW*0.62,totW=contentW*0.38;
+  const totalesArr=[
+    {label:'ABONO $',value:formatPesos(abonoN),bg:[240,237,230]},
+    {label:'',value:'',bg:[245,242,235]},
+    {label:'SALDO $',value:formatPesos(saldoN),bg:[240,237,230]},
+    {label:'TOTAL $',value:formatPesos(totalFinal),bg:[28,26,23]},
+  ];
+  totalesArr.forEach((t,i)=>{
+    doc.setFillColor(...t.bg);doc.rect(totX,y+i*10,totW,10,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);
+    doc.setTextColor(i===3?196:107,i===3?154:79,i===3?60:53);
+    doc.text(t.label,totX+4,y+i*10+6.5);
+    doc.setTextColor(i===3?196:28,i===3?154:26,i===3?60:23);
+    doc.text(t.value,totX+totW-4,y+i*10+6.5,{align:'right'});
+    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(totX,y+i*10,totW,10);
+  });
+  y+=44;
+
+  doc.setFillColor(245,240,232);doc.rect(margin,y,contentW,clausulaHE,'F');
+  doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,contentW,clausulaHE);
+  doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+  doc.text('CLÁUSULAS DE PAGO',margin+contentW/2,y+4,{align:'center'});
+  let tyE=y+8;
+  clausulaTextE.forEach(c=>{
+    const lines=doc.splitTextToSize(c,contentW-6);
+    doc.setFont('helvetica','normal');doc.setFontSize(5.8);doc.setTextColor(80,70,60);
+    doc.text(lines,margin+3,tyE); tyE+=lines.length*3.2+1;
+  });
+  y+=clausulaHE+4;
+
+  // Firmas
+  const pageHF=doc.internal.pageSize.getHeight();
+  if(y+42>pageHF-10){doc.addPage();y=15;}
+  const firmaHE=38,firmaWE=contentW/2-5;
+  doc.setFillColor(240,237,230);doc.rect(margin,y,firmaWE,firmaHE,'F');
+  doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,firmaWE,firmaHE);
+  doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);doc.rect(margin+2,y+2,30,10,'S');
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
+  doc.text('ACEPTADA',margin+17,y+9,{align:'center'});
+  doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(margin+4,y+firmaHE-6,margin+firmaWE-4,y+firmaHE-6);
+  doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+  doc.text('FIRMA Y C.C. DEL COMPRADOR',margin+firmaWE/2,y+firmaHE-2,{align:'center'});
+  const firmaVXE=margin+firmaWE+10;
+  doc.setFillColor(240,237,230);doc.rect(firmaVXE,y,firmaWE,firmaHE,'F');
+  doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(firmaVXE,y,firmaWE,firmaHE);
+  doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(firmaVXE+4,y+firmaHE-6,firmaVXE+firmaWE-4,y+firmaHE-6);
+  doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
+  doc.text('FIRMA DEL VENDEDOR',firmaVXE+firmaWE/2,y+firmaHE-2,{align:'center'});
+
+  // Subir PDF
+  const pdfBlob = doc.output('blob');
+  const fileName = `OrdenPedido_CasaDams_${numOrden.replace('/','_')}_edit_${Date.now()}.pdf`;
+  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`, {
+    method:'POST',
+    headers:{'Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY,'Content-Type':'application/pdf'},
+    body: pdfBlob
+  });
+  return uploadRes.ok ? `${SUPABASE_URL}/storage/v1/object/public/ordenes/${fileName}` : '';
 }
 
 async function guardarYReenviar() {
   const status = document.getElementById('editStatus');
   if (status) { status.textContent = '⏳ Guardando y generando PDF...'; status.style.color = 'var(--warm-gray)'; }
 
-  const ok = await guardarEdicion(true);
+  const ok = await guardarEdicion(true); // guarda datos + regenera PDF
   if (!ok) return;
 
   const o = todasLasOrdenes.find(x => x.id === editandoOrdenId);
   if (!o) return;
 
-  // Generar PDF con datos actualizados usando generarPDFBlob reutilizado
-  // Construimos datos compatibles con getDatos/getProductos usando los del modal
+  // Enviar WhatsApp con el nuevo pdf_url ya actualizado
+  if (status) { status.textContent = '⏳ Enviando por WhatsApp...'; }
   const datosEdit = getEditDatos();
-  const prodEdit = getEditProductos();
+  const numOrden = o.numero_orden || o.op || '—';
+  const pdfLink = o.pdf_url || '';
+  const telefono = (datosEdit.telefono||'').replace(/\D/g,'');
 
   try {
-    if (status) { status.textContent = '⏳ Generando PDF...'; }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'letter' });
-    const W = 215.9, margin = 15, contentW = W - margin*2;
-    const numOrden = o.numero_orden || o.op || '—';
-
-    // Header
-    doc.setFillColor(28,26,23); doc.rect(0,0,W,38,'F');
-    doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.text('CASA DAMS',margin,14);
-    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(158,148,136);
-    doc.text('Muebles Nacionales e Importados',margin,19);
-    doc.text('Cra. 4 N° 49-71 B/Los Laureles 2. Montería - Córdoba',margin,24);
-    doc.text('Cel. 321 540 0839  |  casadams2015@gmail.com',margin,29);
-    doc.setFillColor(196,154,60); doc.roundedRect(W-60,8,46,22,3,3,'F');
-    doc.setTextColor(28,26,23); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.text('ORDEN DE PEDIDO',W-37,14,{align:'center'}); doc.setFontSize(16);
-    doc.text('N° '+numOrden,W-37,22,{align:'center'});
-
-    let y = 44;
-    // Fechas
-    doc.setDrawColor(212,201,184); doc.setLineWidth(0.3); doc.rect(margin,y,contentW,14);
-    const col = contentW/3;
-    doc.setFillColor(240,237,230); doc.rect(margin,y,contentW,6,'F');
-    const headers3=['FECHA DE FACTURA','FORMA DE PAGO','FECHA DE VENCIMIENTO'];
-    const fechaOrden = o.fecha_orden || '';
-    const fechaVenc  = o.fecha_vencimiento || '';
-    const values3=[
-      fechaOrden ? fechaOrden.split('-').reverse().join('/') : '—',
-      datosEdit.metodo_pago || '—',
-      fechaVenc  ? fechaVenc.split('-').reverse().join('/') : '—'
-    ];
-    headers3.forEach((h,i)=>{
-      const x=margin+col*i+col/2;
-      if(i>0){doc.setDrawColor(212,201,184);doc.line(margin+col*i,y,margin+col*i,y+14);}
-      doc.setTextColor(107,79,53);doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.text(h,x,y+4,{align:'center'});
-      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);doc.text(values3[i],x,y+11,{align:'center'});
-    });
-    y+=18;
-
-    const drawFieldE=(label,value,x,fy,w)=>{
-      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text(label+':',x,fy-1);
-      doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(28,26,23);doc.text(value||'—',x,fy+5);
-      doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.line(x,fy+7,x+w,fy+7);
-    };
-    drawFieldE('SEÑORES',datosEdit.cliente,margin,y,contentW); y+=12;
-    drawFieldE('DIRECCIÓN',datosEdit.direccion,margin,y,contentW*0.55);
-    drawFieldE('CIUDAD',datosEdit.ciudad,margin+contentW*0.6,y,contentW*0.4); y+=12;
-    drawFieldE('NIT/C.C.',datosEdit.cedula,margin,y,contentW*0.3);
-    drawFieldE('TEL.',datosEdit.telefono,margin+contentW*0.35,y,contentW*0.25);
-    drawFieldE('CORREO',o.correo||'',margin+contentW*0.65,y,contentW*0.35); y+=16;
-
-    // Tabla productos
-    const colWidths2=[18,contentW-18-32-38-38,32,38,38];
-    const colX2=[margin,margin+18,margin+18+colWidths2[1],margin+18+colWidths2[1]+32,margin+18+colWidths2[1]+32+38];
-    const colHeaders2=['CANT.','DESCRIPCIÓN','REF.','VR. UNITARIO','SUBTOTAL'];
-    doc.setFillColor(28,26,23); doc.rect(margin,y,contentW,8,'F');
-    doc.setTextColor(196,154,60); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
-    colHeaders2.forEach((h,i)=>{ doc.text(h,colX2[i]+colWidths2[i]/2,y+5.5,{align:'center'}); });
-    y+=8;
-
-    const rowMinH2=8;
-    const filasAP=prodEdit.length + 2;
-    for(let i=0;i<filasAP;i++){
-      const p=prodEdit[i]||{};
-      const descLines2=p.desc?doc.splitTextToSize(p.desc,colWidths2[1]-4):[''];
-      const rowH2=Math.max(rowMinH2,descLines2.length*4.5+3.5);
-      const pageH3=doc.internal.pageSize.getHeight();
-      if(y+rowH2>pageH3-10){doc.addPage();y=15;}
-      const bg=i%2===0?[253,252,249]:[245,240,232];
-      doc.setFillColor(...bg);doc.rect(margin,y,contentW,rowH2,'F');
-      doc.setDrawColor(212,201,184);doc.setLineWidth(0.2);doc.line(margin,y+rowH2,margin+contentW,y+rowH2);
-      colX2.forEach((cx,ci)=>{if(ci>0)doc.line(cx,y,cx,y+rowH2);});
-      if(p.qty||p.desc){
-        doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(28,26,23);
-        doc.text(String(p.qty),colX2[0]+colWidths2[0]/2,y+rowH2/2+1.5,{align:'center'});
-        doc.setFontSize(8.5);doc.text(descLines2,colX2[1]+2,y+4.5);
-        doc.setFontSize(8);doc.setTextColor(107,79,53);
-        if(p.ref)doc.text(String(p.ref),colX2[2]+colWidths2[2]/2,y+rowH2/2+1.5,{align:'center'});
-        doc.setTextColor(28,26,23);doc.setFontSize(9);
-        doc.text(p.price||'',colX2[3]+colWidths2[3]-2,y+rowH2/2+1.5,{align:'right'});
-        doc.setFont('helvetica','bold');doc.text(p.sub,colX2[4]+colWidths2[4]-2,y+rowH2/2+1.5,{align:'right'});
-      }
-      y+=rowH2;
-    }
-    y+=4;
-
-    // Totales
-    const totalFinal = prodEdit.reduce((acc,p)=>{const q=parseFloat(p.qty)||0;return acc+q*parseMonto(p.price);},0);
-    const abonoN = o.abono || 0;
-    const saldoN = Math.max(totalFinal - abonoN, 0);
-    const sonLetras = numeroALetras(Math.floor(totalFinal)) + ' PESOS M/CTE';
-
-    // Cláusulas (calcular altura real antes del check de página)
-    const clausulaTextE=[
-      '1. El sistema de pago donde el comprador se compromete a dejar separado un artículo de la empresa CASA DAMS con un valor mínimo inicial del 20% del valor total y durante el plazo pactado ir cancelando por abonos el 80% restante de la negociación; al llegado el caso se cumpla el tiempo y no ha terminado de cancelar asumirá sobre el saldo el incremento del 10% por incumplimiento.',
-      '2. CASA DAMS se compromete que durante el tiempo estipulado en la factura sostendrá el precio del artículo relacionado en ella al terminar de cancelar todo el valor en los días hábiles siguientes entregar el artículo al cliente.',
-      '3. En ningún momento el comprador podrá exigir la devolución del dinero abonado a esta factura. Si llegado el motivo no requiere llevar el artículo o se ha vencido el plazo estipulado y no ha cancelado en su totalidad, el cliente asumirá el 5% del valor total de la factura y el restante del dinero abonado lo llevará en algún artículo del almacén, más no en dinero en efectivo.',
-      '4. CASA DAMS S.A.S se compromete a fabricar el o los muebles descritos en la orden de Pedido con un abono inicial del 50%. El saldo se cancelará en cuanto sea notificado al cliente que el mueble se encuentra listo para su entrega final. Si llegada la fecha de entrega del producto, el cliente no ha cancelado en su totalidad el saldo restante, se dará un plazo máximo de 20 días para cancelar, de lo contrario se cobrará un 5% adicional del valor del saldo por incumplimiento.'
-    ];
-    doc.setFontSize(5.8);
-    let totalLinesE=0;
-    clausulaTextE.forEach(c=>{ totalLinesE+=doc.splitTextToSize(c,contentW-6).length+0.5; });
-    const clausulaHE=8+totalLinesE*3.2;
-
-    // Check: ¿caben totales + cláusulas en lo que queda de página?
-    // Las firmas tienen su propio check más abajo
-    const espacioNecesarioE = 44 + clausulaHE + 4;
-    const pageHCheck2 = doc.internal.pageSize.getHeight();
-    if (y + espacioNecesarioE > pageHCheck2 - 10) { doc.addPage(); y = 15; }
-
-    doc.setFillColor(240,237,230);doc.rect(margin,y,contentW*0.6,10,'F');
-    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(107,79,53);doc.text('SON:',margin+2,y+4);
-    doc.setFont('helvetica','italic');doc.setFontSize(7);doc.setTextColor(28,26,23);
-    const sonLns=doc.splitTextToSize(sonLetras,contentW*0.6-16);
-    doc.text(sonLns[0]||'',margin+14,y+3.5);
-    if(sonLns[1])doc.text(sonLns[1],margin+14,y+7.5);
-
-    const totX=margin+contentW*0.62,totW=contentW*0.38;
-    const totalesArr=[
-      {label:'ABONO $',value:formatPesos(abonoN),bg:[240,237,230]},
-      {label:'',value:'',bg:[245,242,235]},
-      {label:'SALDO $',value:formatPesos(saldoN),bg:[240,237,230]},
-      {label:'TOTAL $',value:formatPesos(totalFinal),bg:[28,26,23]},
-    ];
-    totalesArr.forEach((t,i)=>{
-      doc.setFillColor(...t.bg);doc.rect(totX,y+i*10,totW,10,'F');
-      doc.setFont('helvetica','bold');doc.setFontSize(8);
-      doc.setTextColor(i===3?196:107,i===3?154:79,i===3?60:53);
-      doc.text(t.label,totX+4,y+i*10+6.5);
-      doc.setTextColor(i===3?196:28,i===3?154:26,i===3?60:23);
-      doc.text(t.value,totX+totW-4,y+i*10+6.5,{align:'right'});
-      doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(totX,y+i*10,totW,10);
-    });
-    y+=44;
-
-    // Cláusulas (render — ya calculadas arriba)
-    doc.setFillColor(245,240,232);doc.rect(margin,y,contentW,clausulaHE,'F');
-    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,contentW,clausulaHE);
-    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
-    doc.text('CLÁUSULAS DE PAGO',margin+contentW/2,y+4,{align:'center'});
-    let tyE=y+8;
-    clausulaTextE.forEach(c=>{
-      const lines=doc.splitTextToSize(c,contentW-6);
-      doc.setFont('helvetica','normal');doc.setFontSize(5.8);doc.setTextColor(80,70,60);
-      doc.text(lines,margin+3,tyE); tyE+=lines.length*3.2+1;
-    });
-    y+=clausulaHE+4;
-
-    // Firmas (vacías en edición)
-    const pageHF=doc.internal.pageSize.getHeight();
-    if(y+42>pageHF-10){doc.addPage();y=15;}
-    const firmaHE=38,firmaWE=contentW/2-5;
-    doc.setFillColor(240,237,230);doc.rect(margin,y,firmaWE,firmaHE,'F');
-    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(margin,y,firmaWE,firmaHE);
-    doc.setDrawColor(39,99,74);doc.setLineWidth(1.2);doc.rect(margin+2,y+2,30,10,'S');
-    doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(39,99,74);
-    doc.text('ACEPTADA',margin+17,y+9,{align:'center'});
-    doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(margin+4,y+firmaHE-6,margin+firmaWE-4,y+firmaHE-6);
-    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
-    doc.text('FIRMA Y C.C. DEL COMPRADOR',margin+firmaWE/2,y+firmaHE-2,{align:'center'});
-    const firmaVXE=margin+firmaWE+10;
-    doc.setFillColor(240,237,230);doc.rect(firmaVXE,y,firmaWE,firmaHE,'F');
-    doc.setDrawColor(212,201,184);doc.setLineWidth(0.3);doc.rect(firmaVXE,y,firmaWE,firmaHE);
-    doc.setDrawColor(180,170,160);doc.setLineWidth(0.3);doc.line(firmaVXE+4,y+firmaHE-6,firmaVXE+firmaWE-4,y+firmaHE-6);
-    doc.setFont('helvetica','bold');doc.setFontSize(6.5);doc.setTextColor(107,79,53);
-    doc.text('FIRMA DEL VENDEDOR',firmaVXE+firmaWE/2,y+firmaHE-2,{align:'center'});
-
-    // Subir PDF
-    if(status){status.textContent='⏳ Subiendo PDF...';}
-    const pdfBlob=doc.output('blob');
-    const fileName=`OrdenPedido_CasaDams_${numOrden}_edit_${Date.now()}.pdf`;
-    const uploadRes=await fetch(`${SUPABASE_URL}/storage/v1/object/ordenes/${fileName}`,{
-      method:'POST',headers:{'Authorization':'Bearer '+SUPABASE_KEY,'apikey':SUPABASE_KEY,'Content-Type':'application/pdf'},body:pdfBlob
-    });
-    const pdfLink=uploadRes.ok?`${SUPABASE_URL}/storage/v1/object/public/ordenes/${fileName}`:'';
-
-    // Actualizar pdf_url en Supabase
-    if(pdfLink){
-      await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`,{
-        method:'PATCH',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
-        body:JSON.stringify({pdf_url:pdfLink,enviado_whatsapp:true})
+    if (telefono) {
+      const chatId = (telefono.startsWith('57') ? telefono : '57'+telefono) + '@c.us';
+      const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${datosEdit.cliente||'cliente'}*, se ha actualizado su orden de pedido N° *${numOrden}*:\n\n${pdfLink ? `📄 ${pdfLink}` : '(PDF no disponible)'}\n\n✅ Gracias por su preferencia.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+      await fetch('/api/waha', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({endpoint:'/api/sendText', payload:{session:WAHA_SESSION, chatId, text:mensaje}}) });
+      await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal'},
+        body: JSON.stringify({ enviado_whatsapp: true })
       });
-      o.pdf_url=pdfLink; o.enviado_whatsapp=true;
+      o.enviado_whatsapp = true;
     }
-
-    // Enviar WhatsApp
-    if(status){status.textContent='⏳ Enviando por WhatsApp...';}
-    const telefono=(datosEdit.telefono||'').replace(/\D/g,'');
-    if(telefono){
-      const chatId=(telefono.startsWith('57')?telefono:'57'+telefono)+'@c.us';
-      const mensaje=`🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${datosEdit.cliente||'cliente'}*, se ha actualizado su orden de pedido N° *${numOrden}*:\n\n${pdfLink?`📄 ${pdfLink}`:'(PDF no disponible)'}\n\n✅ Gracias por su preferencia.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
-      await fetch('/api/waha',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendText',payload:{session:WAHA_SESSION,chatId,text:mensaje}})});
-    }
-
-    if(status){status.textContent='✅ Orden actualizada y enviada por WhatsApp';status.style.color='var(--green)';}
+    if (status) { status.textContent = '✅ Orden actualizada y enviada por WhatsApp'; status.style.color = 'var(--green)'; }
     mostrarToast('✅ Orden reenviada exitosamente');
-    setTimeout(()=>{ cerrarEditar(); cargarHistorial(); },2000);
+    setTimeout(() => { cerrarEditar(); cargarHistorial(); }, 2000);
   } catch(e) {
     console.error(e);
-    if(status){status.textContent='⚠️ Error al generar/enviar PDF';status.style.color='var(--red)';}
+    if (status) { status.textContent = '⚠️ Error al enviar WhatsApp'; status.style.color = 'var(--red)'; }
   }
 }
 
