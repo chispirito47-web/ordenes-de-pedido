@@ -19,7 +19,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       headers: {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
     });
     const rows = await rn.json();
-    if (Array.isArray(rows) && rows.length > 0) num = rows[0].valor;
+    if (Array.isArray(rows) && rows.length > 0) num = rows[0].valor + 1;
   } catch(e) { console.warn('Consecutivo offline, usando local'); }
   document.getElementById('numeroCotizacion').value = formatNumCotizacion(num);
   document.getElementById('displayNumero').textContent = formatNumCotizacion(num);
@@ -653,14 +653,39 @@ async function generarPDFBlob() {
   return doc;
 }
 
+async function guardarCotizacionEnSupabase(d, pdfLink, enviadoWA) {
+  try {
+    await fetch(`${_SUPA_URL}/rest/v1/cotizaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json','apikey':_SUPA_KEY,'Authorization':'Bearer '+_SUPA_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify({
+        numero_cotizacion: d.numero,
+        cliente: d.nombre||'', telefono: d.tel||'',
+        fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
+        fecha_vencimiento: d.fechaVencimiento||null,
+        tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
+        productos: productos.filter(p=>p.desc||p.qty).map(p=>({qty:p.qty,desc:p.desc,unitario:p.unitario,sub:formatPesos(subtotalProducto(p))})),
+        valor_total: productos.reduce((acc,p)=>acc+subtotalProducto(p),0),
+        pdf_url: pdfLink||'', enviado_whatsapp: enviadoWA
+      })
+    });
+  } catch(e) { console.warn('Supabase error al guardar cotización:', e); }
+}
+
 async function descargarPDF() {
   try {
     mostrarToast('⏳ Generando PDF...');
     const doc = await generarPDFBlob();
     const d = getDatos();
+    const pdfBlob = doc.output('blob');
+    const fileName = `Cotizacion_CasaDams_${d.numero}_${Date.now()}.pdf`;
+    // Subir a Supabase para que quede en el historial
+    mostrarToast('⏳ Guardando...');
+    const pdfLink = await subirPDFaSupabase(pdfBlob, fileName, 'ordenes');
     doc.save(`Cotizacion_CasaDams_${d.numero}.pdf`);
+    await guardarCotizacionEnSupabase(d, pdfLink, false);
     mostrarToast('✓ PDF descargado');
-    // Avanzar contador la primera vez
+    // Avanzar contador
     const num = parseInt(d.numero.replace(/\D/g, ''));
     if (!isNaN(num)) setContador('cotizacion_num', num);
   } catch (e) {
@@ -739,25 +764,7 @@ Quedamos atentos a su confirmación.
 
     const res = await enviarMensajeWA(chatId, mensaje);
     if (res.ok) {
-      // Guardar en Supabase
-      try {
-        const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
-        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
-        await fetch(`${SUPA_URL}/rest/v1/cotizaciones`, {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal' },
-          body: JSON.stringify({
-            numero_cotizacion: d.numero,
-            cliente: d.nombre||'', telefono: d.tel||'',
-            fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
-            fecha_vencimiento: d.fechaVencimiento||null,
-            tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
-            productos: productos.filter(p=>p.desc||p.qty).map(p=>({qty:p.qty,desc:p.desc,unitario:p.unitario,sub:formatPesos(subtotalProducto(p))})),
-            valor_total: productos.reduce((acc,p)=>acc+subtotalProducto(p),0),
-            pdf_url: pdfLink||'', enviado_whatsapp: true
-          })
-        });
-      } catch(e) { console.warn('Supabase error:', e); }
+      await guardarCotizacionEnSupabase(d, pdfLink, true);
       mostrarToast(pdfLink ? '✓ Cotización enviada con PDF' : '✓ Mensaje enviado');
     } else {
       throw new Error('WAHA error');
@@ -864,7 +871,10 @@ function renderHistCot(lista) {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#F5F0E8;border-bottom:1px solid #D4C9B8">
         <div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
         <div style="font-size:12px;color:#9E9488">${fH(c.fecha_cotizacion)}</div></div>
-        <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
+          ${!c.enviado_whatsapp?`<button id="btn-reenv-cot-${c.id}" onclick="event.stopPropagation();reenviarWACot('${c.id}',this)" style="background:#25D366;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔁 Reenviar WA</button>`:''}
+        </div>
       </div>
       <div style="padding:14px 18px">
         <div style="font-size:16px;font-weight:600;margin-bottom:6px">👤 ${c.cliente||'Sin nombre'}</div>
@@ -878,6 +888,62 @@ function renderHistCot(lista) {
         </div>
       </div>
     </div>`).join('');
+}
+
+/* =========================================================
+   REENVIAR WA COTIZACIÓN
+   ========================================================= */
+async function reenviarWACot(cotId, btn) {
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+
+  try {
+    const c = _cotizaciones.find(x => x.id === cotId);
+    if (!c) throw new Error('Cotización no encontrada');
+
+    const telefono = (c.telefono || '').replace(/\D/g, '');
+    if (!telefono) {
+      mostrarToast('⚠️ Esta cotización no tiene teléfono guardado');
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+      return;
+    }
+
+    const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
+    const productosTxt = (c.productos || [])
+      .filter(p => p.desc || p.qty)
+      .map(p => `• ${p.qty || 1}x ${p.desc} — ${p.sub || ''}`)
+      .join('\n');
+
+    const mensaje = `🛋️ *CASA DAMS — Cotización ${c.numero_cotizacion || '—'}*\n\nHola ${c.cliente || 'cliente'}, le compartimos la cotización solicitada:\n\n${productosTxt}\n\n💰 *Total:* $${Number(c.valor_total||0).toLocaleString('es-CO')}\n${c.fecha_vencimiento ? `📅 *Válida hasta:* ${new Date(c.fecha_vencimiento+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}\n` : ''}${c.pdf_url ? `📄 ${c.pdf_url}` : ''}\n\nQuedamos atentos a su confirmación.\n📍 Cra. 4 N° 49-71, Montería · 📞 321 540 0839`;
+
+    const res = await enviarMensajeWA(chatId, mensaje);
+    if (!res.ok) throw new Error('WAHA error');
+
+    // Marcar como enviado en Supabase
+    await fetch(`${_SUPA_URL}/rest/v1/cotizaciones?id=eq.${cotId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type':'application/json','apikey':_SUPA_KEY,'Authorization':'Bearer '+_SUPA_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify({ enviado_whatsapp: true })
+    });
+
+    // Actualizar en memoria
+    const idx = _cotizaciones.findIndex(x => x.id === cotId);
+    if (idx !== -1) _cotizaciones[idx].enviado_whatsapp = true;
+
+    mostrarToast('✅ WhatsApp enviado correctamente');
+    btn.textContent = '✅ Enviado';
+    btn.style.background = '#27634A';
+    btn.disabled = true;
+    renderHistCot(_cotizaciones);
+
+  } catch(e) {
+    console.error('Error al reenviar WA cotización:', e);
+    mostrarToast('❌ Error al enviar — verifica que WAHA esté activo');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
 }
 
 function verDetCot(id) {
