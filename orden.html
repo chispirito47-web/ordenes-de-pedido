@@ -1910,6 +1910,8 @@ function renderOrdenes(ordenes) {
         <span class="orden-card-badge ${o.enviado_whatsapp?'badge-enviado':'badge-noenv'}">
           ${o.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}
         </span>
+        ${!o.enviado_whatsapp?`<button id="btn-reenv-${o.id}" onclick="event.stopPropagation();reenviarWADirecto('${o.id}',this)" style="margin-left:6px;background:#25D366;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">🔁 Reenviar WA</button>`:''}
+
       </div>
       <div class="orden-card-body">
         <div class="orden-card-cliente">👤 ${o.cliente||'Sin nombre'}</div>
@@ -1985,7 +1987,7 @@ async function verDetalle(id) {
       <div class="detalle-field"><span class="det-label">Forma de pago</span><span class="det-val">${o.metodo_pago||'—'}</span></div>
       <div class="detalle-field"><span class="det-label">Fecha orden</span><span class="det-val">${formatFecha(o.fecha_orden)}</span></div>
       <div class="detalle-field"><span class="det-label">Vencimiento</span><span class="det-val">${formatFecha(o.fecha_vencimiento)}</span></div>
-      <div class="detalle-field"><span class="det-label">Enviada WhatsApp</span><span class="det-val">${o.enviado_whatsapp?'✅ Sí':'❌ No'}</span></div>
+      <div class="detalle-field"><span class="det-label">Enviada WhatsApp</span><span class="det-val">${o.enviado_whatsapp?'✅ Sí':'❌ No — '}<span id="det-reenv-${o.id}">${!o.enviado_whatsapp?`<button onclick="reenviarWADirecto('${o.id}',this)" style="background:#25D366;color:#fff;border:none;border-radius:8px;padding:5px 14px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">🔁 Reenviar WA</button>`:''}</span></span></div>
     </div>
     ${productosHTML}
     <div class="orden-card-totales" style="background:var(--cream);border-radius:12px;padding:16px;margin-bottom:16px;">
@@ -2778,6 +2780,71 @@ function cerrarEditar() {
   document.getElementById('editOverlay').classList.remove('show');
   editandoOrdenId = null;
   editFilas = [];
+}
+
+// ========================
+// REENVIAR WA DIRECTO
+// ========================
+async function reenviarWADirecto(ordenId, btn) {
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+
+  try {
+    // Obtener datos frescos de la orden
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}&select=*`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Orden no encontrada');
+    const o = data[0];
+
+    const telefono = (o.telefono || '').replace(/\D/g, '');
+    if (!telefono) {
+      mostrarToast('⚠️ Esta orden no tiene teléfono guardado');
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+      return;
+    }
+
+    const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
+    const numOrden = o.numero_orden || o.op || '—';
+    const pdfLink = o.pdf_url || '';
+    const mensaje = `🛋️ *CASA DAMS*\n_Muebles Nacionales e Importados_\n\nHola *${o.cliente || 'cliente'}*, adjuntamos su orden de pedido N° *${numOrden}*:\n\n${pdfLink ? `📄 ${pdfLink}` : '(PDF no disponible)'}\n\n✅ Gracias por su preferencia.\n📍 Cra. 4 N° 49-71 B/Los Laureles 2, Montería\n📞 321 540 0839`;
+
+    const resWa = await fetch('/api/waha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: '/api/sendText', payload: { session: WAHA_SESSION, chatId, text: mensaje } })
+    });
+
+    if (!resWa.ok) throw new Error('WAHA respondió con error ' + resWa.status);
+
+    // Marcar como enviado en Supabase
+    await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ enviado_whatsapp: true })
+    });
+
+    // Actualizar en memoria
+    const idx = todasLasOrdenes.findIndex(x => x.id === ordenId);
+    if (idx !== -1) todasLasOrdenes[idx].enviado_whatsapp = true;
+
+    mostrarToast('✅ WhatsApp enviado correctamente');
+    btn.textContent = '✅ Enviado';
+    btn.style.background = 'var(--green)';
+    btn.disabled = true;
+
+    // Refrescar la tarjeta y el detalle si está abierto
+    filtrarOrdenes();
+
+  } catch(e) {
+    console.error('Error al reenviar WA:', e);
+    mostrarToast('❌ Error al enviar — verifica que WAHA esté activo');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
 }
 
 document.getElementById('editOverlay').addEventListener('click', function(e){ if(e.target===this)cerrarEditar(); });
