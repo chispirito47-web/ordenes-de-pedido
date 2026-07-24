@@ -193,6 +193,16 @@ select option{background:var(--paper);}
 @keyframes spin{to{transform:rotate(360deg);}}
 .loading-overlay p{font-size:13px;color:var(--ink-soft);}
 
+/* ── Modal editar movimiento ── */
+.edit-fotos-grid{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+.edit-foto-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);}
+.edit-foto-item img{width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;cursor:pointer;}
+.edit-foto-item .ef-info{flex:1;min-width:0;}
+.edit-foto-item .ef-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-soft);}
+.edit-foto-item .ef-sub{font-size:11px;color:var(--ink-faint);}
+.edit-foto-item .ef-del{font-size:12px;color:var(--consumo);background:none;border:none;cursor:pointer;flex-shrink:0;padding:4px;}
+.edit-foto-item .ef-del:hover{text-decoration:underline;}
+
 /* ── Responsive ── */
 @media(max-width:600px){
   .stats-bar{grid-template-columns:1fr 1fr;}
@@ -320,6 +330,7 @@ select option{background:var(--paper);}
             <th class="th-num">Salida</th>
             <th class="th-num">Saldo</th>
             <th class="th-num">Soporte</th>
+            <th class="th-num">Editar</th>
           </tr>
         </thead>
         <tbody id="movBody"></tbody>
@@ -424,6 +435,64 @@ select option{background:var(--paper);}
     <div class="modal-footer">
       <button class="btn" onclick="closeMov()">Cancelar</button>
       <button class="btn gold" id="movSubmit" onclick="submitMov()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: EDITAR MOVIMIENTO ===================== -->
+<div class="overlay" id="editMovOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-eyebrow" id="editMovEyebrow">Editar movimiento</div>
+        <div class="modal-title" id="editMovTitle">Editar abono</div>
+      </div>
+      <button class="modal-close" onclick="closeEditMov()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <div class="form-group">
+      <label>Monto <span class="req">*</span></label>
+      <input class="input-monto" type="text" id="edit_monto" placeholder="$ 0" oninput="onEditMontoInput(this)">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Método</label>
+        <select id="edit_metodo"></select>
+      </div>
+      <div class="form-group">
+        <label>Fecha <span class="req">*</span></label>
+        <input type="date" id="edit_fecha">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>N.º de referencia</label>
+      <input type="text" id="edit_ref" placeholder="Opcional">
+    </div>
+
+    <div class="form-group">
+      <label>Nota / concepto</label>
+      <textarea id="edit_nota" rows="2"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Fotos del comprobante</label>
+      <div id="editFotosExistentes" class="edit-fotos-grid"></div>
+      <div class="foto-zone" id="editFotoZone" style="margin-top:10px;">
+        <input type="file" id="edit_foto" accept="image/*" multiple onchange="onEditFotoChange(this)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        <p><strong>Agregar foto(s)</strong> — toca o arrastra aquí</p>
+        <div style="font-size:12px;color:var(--ink-faint);margin-top:4px;">Las fotos existentes se mantienen salvo que las elimines</div>
+      </div>
+      <div id="editFotoThumb" class="foto-thumb" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditMov()">Cancelar</button>
+      <button class="btn gold" id="editMovSubmit" onclick="submitEditMov()">Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -634,6 +703,7 @@ function renderCliente(id) {
     run+=m.tipo==='abono'?m.monto:-m.monto;
     const concepto=m.nota?`<div class="cli-name" style="font-weight:500;font-size:14px;">${m.metodo}</div><div class="row-note">${m.nota}</div>`:`<div style="font-weight:500;">${m.metodo}</div>`;
     const soporte=`<button class="btn link" onclick="event.stopPropagation();openComp('${m.id}')">Comprobante</button>`;
+    const editar=`<button class="btn link" style="color:var(--ink-soft);" onclick="event.stopPropagation();openEditMov('${m.id}')">✏️ Editar</button>`;
     return `<tr>
       <td><span class="amount" style="color:var(--ink-soft);font-weight:500;">${fmtFecha(m.fecha)}</span></td>
       <td><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;"><span class="tag ${m.tipo}"><span class="dot"></span>${m.tipo==='abono'?'Abono':'Consumo'}</span>${m.ref?`<span class="cli-meta">${m.ref}</span>`:''}</div>${concepto}</td>
@@ -641,10 +711,11 @@ function renderCliente(id) {
       <td class="num"><span class="amount neg">${m.tipo==='consumo'?'−'+fmtCOP(m.monto):'—'}</span></td>
       <td class="num"><span class="amount bal">${fmtCOP(run)}</span></td>
       <td class="num">${soporte}</td>
+      <td class="num">${editar}</td>
     </tr>`;
   }).reverse().join('');
 
-  document.getElementById('movBody').innerHTML=rows||`<tr><td colspan="6"><div class="empty"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 2v20M2 12h20"></path></svg><p>Sin movimientos. Registra el primer abono.</p></div></td></tr>`;
+  document.getElementById('movBody').innerHTML=rows||`<tr><td colspan="7"><div class="empty"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 2v20M2 12h20"></path></svg><p>Sin movimientos. Registra el primer abono.</p></div></td></tr>`;
 }
 
 /* ════════════════════════════════════
@@ -824,6 +895,168 @@ async function submitMov(){
 }
 
 /* ════════════════════════════════════
+   MODAL: EDITAR MOVIMIENTO
+════════════════════════════════════ */
+let editMovId = null;
+let editFotosNuevas = [];       // archivos nuevos a subir
+let editFotosEliminar = [];     // URLs de fotos a eliminar del bucket
+let editFotosActuales = [];     // URLs que quedan (sin eliminar)
+
+function openEditMov(movId) {
+  const m = MOVS.find(x => x.id === movId); if (!m) return;
+  const c = getCliente(m.cliente_id);
+  editMovId = movId;
+  editFotosNuevas = [];
+  editFotosEliminar = [];
+  editFotosActuales = m.fotos_urls && m.fotos_urls.length ? [...m.fotos_urls] : (m.foto_url ? [m.foto_url] : []);
+
+  const isAbono = m.tipo === 'abono';
+  document.getElementById('editMovEyebrow').textContent = c.nombre + ' · ' + fmtFecha(m.fecha);
+  document.getElementById('editMovTitle').textContent = isAbono ? 'Editar abono' : 'Editar consumo';
+
+  // monto
+  document.getElementById('edit_monto').value = m.monto ? '$ ' + m.monto.toLocaleString('es-CO') : '';
+  // fecha
+  document.getElementById('edit_fecha').value = m.fecha ? m.fecha.slice(0,10) : '';
+  // ref y nota
+  document.getElementById('edit_ref').value = m.ref || '';
+  document.getElementById('edit_nota').value = m.nota || '';
+  // método
+  const sel = document.getElementById('edit_metodo');
+  sel.innerHTML = isAbono
+    ? `<option>Transferencia</option><option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Bancolombia</option><option>Cheque</option>`
+    : `<option>Despacho</option><option>Entrega en tienda</option><option>Ajuste</option><option>Devolución de saldo</option>`;
+  sel.value = m.metodo || sel.options[0].value;
+
+  // fotos existentes
+  renderEditFotosExistentes();
+  // fotos nuevas (vacío)
+  document.getElementById('editFotoThumb').innerHTML = '';
+  document.getElementById('editFotoThumb').classList.remove('show');
+  if (document.getElementById('edit_foto')) document.getElementById('edit_foto').value = '';
+
+  document.getElementById('editMovOverlay').classList.add('show');
+}
+
+function closeEditMov() {
+  document.getElementById('editMovOverlay').classList.remove('show');
+  editMovId = null; editFotosNuevas = []; editFotosEliminar = []; editFotosActuales = [];
+}
+
+function renderEditFotosExistentes() {
+  const wrap = document.getElementById('editFotosExistentes');
+  if (!editFotosActuales.length) { wrap.innerHTML = '<p style="font-size:12px;color:var(--ink-faint);margin-bottom:4px;">Sin fotos adjuntas actualmente.</p>'; return; }
+  wrap.innerHTML = editFotosActuales.map((url, i) => `
+    <div class="edit-foto-item">
+      <img src="${url}" onclick="window.open('${url}','_blank')" title="Ver foto">
+      <div class="ef-info">
+        <div class="ef-name">Foto ${i + 1}</div>
+        <div class="ef-sub">Toca la imagen para ver</div>
+      </div>
+      <button class="ef-del" onclick="eliminarFotoExistente(${i})">Eliminar</button>
+    </div>`).join('');
+}
+
+function eliminarFotoExistente(i) {
+  const url = editFotosActuales[i];
+  editFotosEliminar.push(url);
+  editFotosActuales.splice(i, 1);
+  renderEditFotosExistentes();
+}
+
+function onEditFotoChange(input) {
+  const nuevas = Array.from(input.files || []); if (!nuevas.length) return;
+  editFotosNuevas = editFotosNuevas.concat(nuevas);
+  input.value = '';
+  renderEditFotoThumbs();
+}
+
+function renderEditFotoThumbs() {
+  const thumb = document.getElementById('editFotoThumb');
+  if (!editFotosNuevas.length) { thumb.innerHTML = ''; thumb.classList.remove('show'); return; }
+  thumb.classList.add('show');
+  thumb.innerHTML = editFotosNuevas.map((f, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px;margin-bottom:6px;border:1px solid var(--border);border-radius:8px;background:var(--bg);">
+      <img src="${URL.createObjectURL(f)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.name}</div>
+        <div style="font-size:12px;color:var(--ink-faint);">Nueva · Foto ${i + 1}</div>
+      </div>
+      <button style="font-size:12px;color:var(--consumo);background:none;border:none;cursor:pointer;" onclick="quitarEditFotoNueva(${i})">✕</button>
+    </div>`).join('');
+}
+
+function quitarEditFotoNueva(i) { editFotosNuevas.splice(i, 1); renderEditFotoThumbs(); }
+
+function onEditMontoInput(input) {
+  const v = parseMonto(input.value);
+  input.value = v ? '$ ' + v.toLocaleString('es-CO') : '';
+}
+
+async function borrarFotoStorage(url) {
+  // Extraer path relativo desde la URL pública
+  // URL pública: https://xxx.supabase.co/storage/v1/object/public/depositos/fotos/...
+  const marker = '/object/public/' + BUCKET + '/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return; // no pertenece a nuestro bucket
+  const path = url.slice(idx + marker.length);
+  await fetch(`${SB_URL}/storage/v1/object/${BUCKET}/${path}`, {
+    method: 'DELETE',
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+  });
+}
+
+async function submitEditMov() {
+  const monto = parseMonto(document.getElementById('edit_monto').value);
+  const fecha = document.getElementById('edit_fecha').value;
+  const metodo = document.getElementById('edit_metodo').value;
+  const ref = document.getElementById('edit_ref').value.trim();
+  const nota = document.getElementById('edit_nota').value.trim();
+  if (!monto) { toast('Indica el monto', true); return; }
+  if (!fecha) { toast('Indica la fecha', true); return; }
+
+  const btn = document.getElementById('editMovSubmit'); btn.disabled = true;
+  try {
+    // 1. Subir fotos nuevas
+    let fotosFinales = [...editFotosActuales];
+    if (editFotosNuevas.length) {
+      loading(true, `Subiendo ${editFotosNuevas.length} foto(s)…`);
+      for (let i = 0; i < editFotosNuevas.length; i++) {
+        const f = editFotosNuevas[i];
+        const ext = f.name.split('.').pop();
+        const url = await subirFoto(f, `fotos/${editMovId}_edit_${Date.now()}_${i}.${ext}`);
+        fotosFinales.push(url);
+      }
+    }
+
+    // 2. Actualizar registro en Supabase
+    loading(true, 'Guardando cambios…');
+    const res = await fetch(`${SB_URL}/rest/v1/depositos_movimientos?id=eq.${editMovId}`, {
+      method: 'PATCH',
+      headers: { ...sbH(), Prefer: 'return=representation' },
+      body: JSON.stringify({ monto, fecha, metodo, ref, nota, fotos_urls: fotosFinales })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const [updated] = await res.json();
+
+    // 3. Borrar fotos eliminadas del storage (best-effort)
+    for (const url of editFotosEliminar) {
+      try { await borrarFotoStorage(url); } catch(e) { /* silencioso */ }
+    }
+
+    // 4. Actualizar estado local
+    const idx = MOVS.findIndex(m => m.id === editMovId);
+    if (idx !== -1) MOVS[idx] = { ...MOVS[idx], ...updated, monto: Number(updated.monto), fotos_urls: fotosFinales };
+
+    loading(false);
+    closeEditMov();
+    renderCliente(currentClienteId);
+    toast('Movimiento actualizado');
+  } catch(e) { loading(false); toast('Error: ' + e.message, true); }
+  finally { btn.disabled = false; }
+}
+
+/* ════════════════════════════════════
    COMPROBANTE
 ════════════════════════════════════ */
 function compNumero(mov){
@@ -907,11 +1140,11 @@ function loading(show,msg='Guardando…'){
 ════════════════════════════════════ */
 document.getElementById('searchClientes').addEventListener('input',e=>renderClientes(e.target.value));
 document.getElementById('docDate').textContent=fmtFecha(hoyISO()).toUpperCase();
-[document.getElementById('movOverlay'),document.getElementById('ncOverlay'),document.getElementById('compOuter')].forEach(ov=>{
+[document.getElementById('movOverlay'),document.getElementById('ncOverlay'),document.getElementById('compOuter'),document.getElementById('editMovOverlay')].forEach(ov=>{
   ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('show');});
 });
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeMov();closeComp();closeNuevoCliente();}
+  if(e.key==='Escape'){closeMov();closeComp();closeNuevoCliente();closeEditMov();}
 });
 cargarDatos();
 </script>
