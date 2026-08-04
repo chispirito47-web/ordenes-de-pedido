@@ -2343,6 +2343,7 @@ async function subirASecretaria(ordenId, btn) {
     `Abonado:   ${formatCOP(totalAbonado)}  (${filasCartera.length} pago${filasCartera.length===1?'':'s'})\n` +
     `Saldo:     ${formatCOP(saldoReal)}\n` +
     `Estado:    ${etiqEstado}\n\n` +
+    `Soporte:   ${o.pdf_url ? 'se adjunta automáticamente ✓' : 'la orden no tiene PDF ✗'}\n\n` +
     `Revisa que todo esté correcto. Después tendrás que corregirlo desde Secretaria.`;
   if (!confirm(resumen)) return;
 
@@ -2366,6 +2367,7 @@ async function subirASecretaria(ordenId, btn) {
     console.log('Extras dentro de nota:', previewExtras);
     console.log('Filas que se crearían en abonos_cartera:', filasCartera);
     console.log('Aparecería en Cartera:', estadoSec !== 'pagado' ? 'SÍ, saldo ' + formatCOP(saldoReal) : 'NO (queda pagada)');
+    console.log('Soporte que se adjuntaría:', o.pdf_url || '(la orden no tiene PDF)');
     console.groupEnd();
     alert(
       '🧪 MODO PRUEBA — no se guardó nada\n\n' +
@@ -2379,6 +2381,7 @@ async function subirASecretaria(ordenId, btn) {
       '  Método:   ' + metodoSec + '\n' +
       '  Fecha:    ' + fechaOrden + '\n\n' +
       'Filas en abonos_cartera: ' + filasCartera.length + '\n' +
+      'Soporte adjunto: ' + (o.pdf_url ? 'SÍ (PDF de la orden como imagen)' : 'NO — la orden no tiene PDF') + '\n' +
       (estadoSec !== 'pagado' ? 'Aparecería en CARTERA con saldo ' + formatCOP(saldoReal) : 'NO iría a cartera (pagada)') + '\n\n' +
       'Abre la consola (F12) para ver el detalle completo.'
     );
@@ -2402,6 +2405,61 @@ async function subirASecretaria(ordenId, btn) {
         return;
       }
     }
+
+    // ── Detectar si esta venta YA existe en Secretaria (registrada a mano) ──
+    // La marca registrado_secretaria solo sabe de subidas hechas con este boton.
+    // Si la secretaria la escribio a mano, hay que avisar antes de duplicar.
+    try {
+      const normal = (s) => (s||'').toString().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+      const telOrden = (o.telefono||'').replace(/\D/g,'');
+      const nomOrden = normal(o.cliente);
+      const tokensOrden = nomOrden.split(' ').filter(t => t.length > 2);
+
+      const resDup = await fetch(
+        `${SUPABASE_URL}/rest/v1/transacciones?tipo=eq.ingreso&monto=eq.${totalOrden}&select=id,descripcion,cliente,nota,fecha,monto,abono,estado`,
+        { headers:{ 'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY } }
+      );
+      if (resDup.ok) {
+        const candidatos = await resDup.json();
+        const sospechosos = (candidatos||[]).filter(t => {
+          let ex = {};
+          try { const m = (t.nota||'').match(/\u27E6([\s\S]*)\u27E7/); if (m) ex = JSON.parse(m[1]); } catch(_){}
+          // Mismo telefono = practicamente seguro que es la misma venta
+          const telTx = ((t.telefono||ex.telefono)||'').replace(/\D/g,'');
+          if (telOrden && telTx && telOrden.slice(-7) === telTx.slice(-7)) return true;
+          // Mismo numero de factura
+          if (ex.factura && numOrden && normal(ex.factura).replace(/[^0-9]/g,'') ===
+              normal(numOrden).replace(/[^0-9]/g,'')) return true;
+          // Nombre parecido: comparten al menos 2 palabras largas
+          const nomTx = normal(t.cliente || ex.cliente);
+          if (!nomTx || !nomOrden) return false;
+          if (nomTx.includes(nomOrden) || nomOrden.includes(nomTx)) return true;
+          const comunes = tokensOrden.filter(tk => nomTx.includes(tk));
+          return comunes.length >= 2;
+        });
+
+        if (sospechosos.length > 0) {
+          const lista = sospechosos.slice(0,3).map(t =>
+            `  \u2022 ${(t.descripcion||'sin concepto').slice(0,45)}\n` +
+            `    ${t.fecha} \u2014 ${formatCOP(t.monto)} \u2014 abono ${formatCOP(t.abono||0)} \u2014 ${t.estado}`
+          ).join('\n');
+          const seguir = confirm(
+            `\u26A0\uFE0F POSIBLE DUPLICADO\n\n` +
+            `Ya hay ${sospechosos.length} registro${sospechosos.length===1?'':'s'} en Secretaria por el mismo monto ` +
+            `y con un cliente parecido:\n\n${lista}\n\n` +
+            `Es muy probable que esta venta ya se haya registrado a mano.\n\n` +
+            `¿Subirla de todas formas? (Si no estás seguro, dale Cancelar y revisa en Secretaria)`
+          );
+          if (!seguir) {
+            mostrarToast('Subida cancelada — revisa Secretaria');
+            if (btn) { btn.disabled = false; btn.textContent = '📤 Subir a Secretaria'; }
+            return;
+          }
+        }
+      }
+    } catch(eDup) { console.warn('Chequeo de duplicados falló (no crítico):', eDup); }
 
     const extras = {
       cliente:       o.cliente   || '',
@@ -2481,6 +2539,13 @@ async function subirASecretaria(ordenId, btn) {
       body: JSON.stringify({ abono: abonadoOk, estado: estadoFinal, nota: '\u27E6' + JSON.stringify(extras) + '\u27E7' })
     });
 
+    // ── Subir el soporte de la orden (PDF -> JPG) al bucket de Secretaria ──
+    let soporteOk = false;
+    if (o.pdf_url) {
+      if (btn) btn.textContent = '⏳ Subiendo soporte...';
+      soporteOk = await subirSoporteAComprobantes(o.pdf_url, secId);
+    }
+
     // ── Marcar la orden para que no se pueda subir dos veces ──
     await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
       method:'PATCH',
@@ -2493,7 +2558,11 @@ async function subirASecretaria(ordenId, btn) {
       mostrarToast('⚠️ Subida con avisos — revisa los abonos en Secretaria');
       alert(`La orden ${numOrden} se subió, pero no todos los pagos entraron.\n\nEsperado: ${formatCOP(totalAbonado)}\nRegistrado: ${formatCOP(abonadoOk)}\n\nRevisa la pestaña Cartera en Secretaria y completa el pago faltante a mano.`);
     } else {
-      mostrarToast(estadoFinal === 'pagado' ? '✅ Subida a Secretaria como PAGADA' : '✅ Subida a Secretaria — queda en cartera');
+      const sufijo = o.pdf_url ? (soporteOk ? ' · soporte adjunto' : ' · SIN soporte') : '';
+      mostrarToast((estadoFinal === 'pagado' ? '✅ Subida a Secretaria como PAGADA' : '✅ Subida a Secretaria — queda en cartera') + sufijo);
+      if (o.pdf_url && !soporteOk) {
+        alert(`La orden ${numOrden} se subió correctamente, pero el soporte no se pudo adjuntar.\n\nPuedes subirlo a mano desde Secretaria con el botón de foto.`);
+      }
     }
     if (btn) { btn.disabled = true; btn.style.background = '#6B7280'; btn.style.cursor = 'default'; btn.textContent = '✅ Ya en Secretaria'; }
 
@@ -2504,69 +2573,85 @@ async function subirASecretaria(ordenId, btn) {
   }
 }
 
+// Convierte el PDF de una orden en un canvas recortado (reutilizado por
+// descargarOrdenPNG y por la subida automática del soporte a Secretaria).
+async function renderPDFaCanvas(pdfUrl, escala) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+  const canvasList = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: escala || 4 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    canvasList.push(canvas);
+  }
+
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = canvasList[0].width;
+  finalCanvas.height = canvasList.reduce((s, c) => s + c.height, 0);
+  const ctx = finalCanvas.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+  let offsetY = 0;
+  canvasList.forEach(c => { ctx.drawImage(c, 0, offsetY); offsetY += c.height; });
+
+  // Recortar el blanco sobrante del final
+  const pixels = ctx.getImageData(0, 0, finalCanvas.width, finalCanvas.height).data;
+  let lastContentRow = 0;
+  for (let row = finalCanvas.height - 1; row >= 0; row--) {
+    let isBlank = true;
+    for (let col = 0; col < finalCanvas.width; col++) {
+      const idx = (row * finalCanvas.width + col) * 4;
+      if (pixels[idx] < 250 || pixels[idx+1] < 250 || pixels[idx+2] < 250) { isBlank = false; break; }
+    }
+    if (!isBlank) { lastContentRow = row; break; }
+  }
+  const cropped = document.createElement('canvas');
+  cropped.width = finalCanvas.width;
+  cropped.height = Math.min(lastContentRow + 20, finalCanvas.height);
+  cropped.getContext('2d').drawImage(finalCanvas, 0, 0);
+  return cropped;
+}
+
 async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
   try {
     mostrarToast('⏳ Generando imagen...');
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-    const loadingTask = pdfjsLib.getDocument(pdfUrl);
-    const pdf = await loadingTask.promise;
-    const totalPages = pdf.numPages;
-
-    // Renderizar cada página
-    const canvasList = [];
-    for (let i = 1; i <= totalPages; i++) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 4 }); // zoom mayor = se ve más cerca
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      canvasList.push(canvas);
-    }
-
-    // Unir todas las páginas verticalmente en un solo canvas
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = canvasList[0].width;
-    finalCanvas.height = canvasList.reduce((sum, c) => sum + c.height, 0);
-    const ctx = finalCanvas.getContext('2d');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-    let offsetY = 0;
-    canvasList.forEach(c => { ctx.drawImage(c, 0, offsetY); offsetY += c.height; });
-
-    // Recortar filas blancas al final del canvas
-    const imageData = ctx.getImageData(0, 0, finalCanvas.width, finalCanvas.height);
-    const pixels = imageData.data;
-    let lastContentRow = 0;
-    for (let row = finalCanvas.height - 1; row >= 0; row--) {
-      let isBlank = true;
-      for (let col = 0; col < finalCanvas.width; col++) {
-        const idx = (row * finalCanvas.width + col) * 4;
-        if (pixels[idx] < 250 || pixels[idx+1] < 250 || pixels[idx+2] < 250) {
-          isBlank = false; break;
-        }
-      }
-      if (!isBlank) { lastContentRow = row; break; }
-    }
-    // Canvas recortado (con padding de 20px abajo)
-    const croppedH = Math.min(lastContentRow + 20, finalCanvas.height);
-    const croppedCanvas = document.createElement('canvas');
-    croppedCanvas.width = finalCanvas.width;
-    croppedCanvas.height = croppedH;
-    croppedCanvas.getContext('2d').drawImage(finalCanvas, 0, 0);
-
-    // Descargar
+    const cropped = await renderPDFaCanvas(pdfUrl, 4);
     const nombreLimpio = (cliente || 'cliente').replace(/\s+/g, '-').substring(0, 30);
     const link = document.createElement('a');
     link.download = `OrdenCasaDams-${numeroOrden}-${nombreLimpio}.png`;
-    link.href = croppedCanvas.toDataURL('image/png');
+    link.href = cropped.toDataURL('image/png');
     link.click();
     mostrarToast('✅ Imagen descargada');
   } catch(e) {
     console.error(e);
     mostrarToast('⚠️ Error al generar imagen');
+  }
+}
+
+// Sube el soporte de la orden (PDF convertido a JPG) al bucket de Secretaria.
+// Se guarda como {txId}_1.jpg para no chocar con la foto que la secretaria
+// suba después a mano ({txId}.jpg), asi conviven las dos.
+async function subirSoporteAComprobantes(pdfUrl, txId) {
+  try {
+    const cropped = await renderPDFaCanvas(pdfUrl, 2.5);
+    const blob = await new Promise(res => cropped.toBlob(res, 'image/jpeg', 0.82));
+    if (!blob) return false;
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/comprobantes/${txId}_1.jpg`, {
+      method: 'POST',
+      headers: { 'Authorization':'Bearer '+SUPABASE_KEY, 'apikey':SUPABASE_KEY, 'Content-Type':'image/jpeg', 'x-upsert':'true' },
+      body: blob
+    });
+    if (!up.ok) { console.warn('Soporte no subido:', up.status, await up.text()); return false; }
+    return true;
+  } catch(e) {
+    console.warn('Error generando/subiendo soporte:', e);
+    return false;
   }
 }
 
