@@ -2635,14 +2635,15 @@ async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
 }
 
 // Sube el soporte de la orden (PDF convertido a JPG) al bucket de Secretaria.
-// Se guarda como {txId}_1.jpg para no chocar con la foto que la secretaria
-// suba después a mano ({txId}.jpg), asi conviven las dos.
+// Se guarda como {txId}_orden.jpg. Ese sufijo no lo usa nadie mas:
+// la secretaria sube {txId}.ext (una foto) o {txId}_1, _2, _3 (varias),
+// asi que nunca se pisan y en Secretaria se ven todas juntas.
 async function subirSoporteAComprobantes(pdfUrl, txId) {
   try {
     const cropped = await renderPDFaCanvas(pdfUrl, 2.5);
     const blob = await new Promise(res => cropped.toBlob(res, 'image/jpeg', 0.82));
     if (!blob) return false;
-    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/comprobantes/${txId}_1.jpg`, {
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/comprobantes/${txId}_orden.jpg`, {
       method: 'POST',
       headers: { 'Authorization':'Bearer '+SUPABASE_KEY, 'apikey':SUPABASE_KEY, 'Content-Type':'image/jpeg', 'x-upsert':'true' },
       body: blob
