@@ -1821,6 +1821,26 @@ function cambiarTab(tab) {
 // HISTORIAL
 // ========================
 let todasLasOrdenes = [];
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODO PRUEBA — se activa agregando ?prueba=1 al final de la URL.
+// Con el modo prueba activo, "Subir a Secretaria" NO escribe nada en la
+// base de datos: solo muestra exactamente lo que se iba a guardar.
+// Sirve para verificar el resultado sin ensuciar el dashboard real.
+// ─────────────────────────────────────────────────────────────────────────
+const MODO_PRUEBA = new URLSearchParams(location.search).get('prueba') === '1';
+
+if (MODO_PRUEBA) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const aviso = document.createElement('div');
+    aviso.textContent = '🧪 MODO PRUEBA ACTIVO — nada se guardará en Secretaria';
+    aviso.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#B45309;color:#fff;' +
+      'text-align:center;padding:9px 12px;font-family:\'DM Sans\',sans-serif;font-weight:700;font-size:13px;' +
+      'letter-spacing:0.3px;box-shadow:0 2px 10px rgba(0,0,0,0.25);';
+    document.body.appendChild(aviso);
+    document.body.style.paddingTop = '36px';
+  });
+}
 let filtroEstado = 'todos';
 
 async function cargarHistorial() {
@@ -1975,6 +1995,7 @@ async function verDetalle(id) {
       ${o.pdf_url?`<a href="${o.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:var(--gold);color:var(--dark);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;">📄 Ver PDF orden</a>`:''}
       ${o.pdf_url?`<button onclick="descargarOrdenPNG('${o.pdf_url}','${(o.numero_orden||o.op||'orden')}','${(o.cliente||'cliente').replace(/'/g,'')}') " style="display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:var(--gold);border:1.5px solid var(--gold);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🖼 Descargar imagen</button>`:''}
       <button onclick="cerrarDetalle();abrirEditar('${o.id}')" style="display:inline-flex;align-items:center;gap:8px;background:var(--brown);color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">✏️ Editar orden</button>
+      <button id="btn-subir-sec-${o.id}" onclick="subirASecretaria('${o.id}',this)" style="display:inline-flex;align-items:center;gap:8px;background:${o.registrado_secretaria?'#6B7280':'var(--green)'};color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:${o.registrado_secretaria?'default':'pointer'};" ${o.registrado_secretaria?'disabled title=\"Ya en Secretaria\"':''}>${o.registrado_secretaria?'✅ Ya en Secretaria':'📤 Subir a Secretaria'}</button>
     </div>
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
@@ -2237,6 +2258,251 @@ ${estadoPago}${comprobanteLink ? '\n\n📄 Comprobante: ' + comprobanteLink : ''
 }
 
 function cerrarDetalle() { document.getElementById('detalleOverlay').classList.remove('show'); }
+
+async function subirASecretaria(ordenId, btn) {
+  const o = todasLasOrdenes.find(x => x.id === ordenId);
+  if (!o) return;
+  if (o.registrado_secretaria) { mostrarToast('Esta orden ya está en Secretaria'); return; }
+
+  const numOrden   = String(o.numero_orden || o.op || '');
+  const totalOrden = Number(o.valor_total) || 0;
+
+  if (totalOrden <= 0) {
+    alert('⚠️ Esta orden no tiene un valor total válido. Corrígela antes de subirla a Secretaria.');
+    return;
+  }
+
+  // ── Traer los abonos reales de esta orden ──
+  let abonosOrden = [];
+  try {
+    const resAb = await fetch(`${SUPABASE_URL}/rest/v1/abonos?pedido_id=eq.${ordenId}&order=created_at.asc`, {
+      headers: { 'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY }
+    });
+    if (resAb.ok) abonosOrden = await resAb.json();
+  } catch(e) { console.warn('No se pudieron leer abonos:', e); }
+
+  // ── Mapear método de pago a los valores que entiende Secretaria ──
+  const mapMetodo = (m) => {
+    const s = (m || '').toLowerCase();
+    if (s.includes('efectivo'))                        return 'efectivo';
+    if (s.includes('transfer') || s.includes('nequi') ||
+        s.includes('daviplata') || s.includes('bancol')) return 'transferencia';
+    if (s.includes('credito') || s.includes('crédito')) return 'tarjeta_credito';
+    if (s.includes('tarjeta') || s.includes('debito') ||
+        s.includes('débito'))                          return 'tarjeta_debito';
+    return 'efectivo';
+  };
+  const metodoSec = mapMetodo(o.metodo_pago);
+  const fechaOrden = (o.fecha_orden || '').slice(0,10) ||
+                     new Date().toLocaleDateString('en-CA', { timeZone:'America/Bogota' });
+
+  // ── Construir las filas de cartera (fuente de verdad de lo cobrado) ──
+  let filasCartera = [];
+  if (abonosOrden.length > 0) {
+    filasCartera = abonosOrden.map(a => ({
+      fecha:  ((a.created_at || '') + '').slice(0,10) || fechaOrden,
+      monto:  Number(a.monto) || 0,
+      metodo: mapMetodo(a.medio || a.metodo || o.metodo_pago),
+      nota:   `Abono orden ${numOrden}`
+    })).filter(f => f.monto > 0);
+  } else if (Number(o.abono) > 0) {
+    filasCartera = [{
+      fecha:  fechaOrden,
+      monto:  Number(o.abono),
+      metodo: metodoSec,
+      nota:   `Abono inicial orden ${numOrden}`
+    }];
+  }
+
+  const totalAbonado = filasCartera.reduce((s,f) => s + f.monto, 0);
+  const saldoReal    = Math.max(0, totalOrden - totalAbonado);
+  const estadoSec    = totalAbonado >= totalOrden - 1 ? 'pagado'
+                     : (totalAbonado > 0 ? 'abono' : 'pendiente');
+
+  // ── Descripción = productos (igual que registra Secretaria a mano) ──
+  const prods = Array.isArray(o.productos) ? o.productos : [];
+  let descripcion = prods.map(p => {
+    const q = (p.qty || '').toString().trim();
+    const d = (p.desc || '').toString().trim();
+    return d ? (q && q !== '1' ? `${q} ${d}` : d) : '';
+  }).filter(Boolean).join(', ');
+  if (!descripcion) descripcion = `Orden ${numOrden}`;
+  if (descripcion.length > 250) descripcion = descripcion.slice(0,247) + '...';
+
+  // ── Confirmación explícita con el resumen de lo que se va a subir ──
+  const etiqEstado = estadoSec === 'pagado' ? 'PAGADA' : estadoSec === 'abono' ? 'ABONO (queda en cartera)' : 'PENDIENTE (queda en cartera)';
+  const resumen =
+    `¿Subir esta orden a Secretaria?\n\n` +
+    `Orden:     ${numOrden}\n` +
+    `Cliente:   ${o.cliente || '—'}\n` +
+    `Vendedor:  ${o.vendedor || '—'}\n` +
+    `Concepto:  ${descripcion.slice(0,60)}${descripcion.length>60?'...':''}\n` +
+    `Fecha:     ${formatFecha(fechaOrden)}\n` +
+    `Método:    ${o.metodo_pago || '—'}  →  ${metodoSec}\n\n` +
+    `Total:     ${formatCOP(totalOrden)}\n` +
+    `Abonado:   ${formatCOP(totalAbonado)}  (${filasCartera.length} pago${filasCartera.length===1?'':'s'})\n` +
+    `Saldo:     ${formatCOP(saldoReal)}\n` +
+    `Estado:    ${etiqEstado}\n\n` +
+    `Revisa que todo esté correcto. Después tendrás que corregirlo desde Secretaria.`;
+  if (!confirm(resumen)) return;
+
+  // ── MODO PRUEBA: mostrar lo que se iba a guardar y NO escribir nada ──
+  if (MODO_PRUEBA) {
+    const previewExtras = {
+      cliente: o.cliente||'', telefono: o.telefono||'', direccion: o.direccion||'',
+      fechaEntrega: o.fecha_vencimiento ? String(o.fecha_vencimiento).slice(0,10) : null,
+      factura: numOrden, saldo: saldoReal, estadoEntrega: 'por-entregar',
+      tipoIngreso: 'venta', recaudoMes: null,
+      metodoOriginal: o.metodo_pago||'', origenOrden: numOrden
+    };
+    const previewTx = {
+      tipo:'ingreso', descripcion, monto: totalOrden, metodo: metodoSec,
+      vendedor: o.vendedor||'', cliente: o.cliente||'', telefono: o.telefono||'',
+      direccion: o.direccion||'', estado: estadoSec, abono: totalAbonado,
+      fecha: fechaOrden, tipo_ingreso:'venta', recaudo_mes:null
+    };
+    console.group('🧪 MODO PRUEBA — orden ' + numOrden);
+    console.log('Fila que se crearía en transacciones:', previewTx);
+    console.log('Extras dentro de nota:', previewExtras);
+    console.log('Filas que se crearían en abonos_cartera:', filasCartera);
+    console.log('Aparecería en Cartera:', estadoSec !== 'pagado' ? 'SÍ, saldo ' + formatCOP(saldoReal) : 'NO (queda pagada)');
+    console.groupEnd();
+    alert(
+      '🧪 MODO PRUEBA — no se guardó nada\n\n' +
+      'Se habría creado en Secretaria:\n' +
+      '  Concepto: ' + descripcion.slice(0,50) + (descripcion.length>50?'...':'') + '\n' +
+      '  Cliente:  ' + (o.cliente||'—') + '\n' +
+      '  Vendedor: ' + (o.vendedor||'—') + '\n' +
+      '  Monto:    ' + formatCOP(totalOrden) + '\n' +
+      '  Abono:    ' + formatCOP(totalAbonado) + '\n' +
+      '  Estado:   ' + estadoSec + '\n' +
+      '  Método:   ' + metodoSec + '\n' +
+      '  Fecha:    ' + fechaOrden + '\n\n' +
+      'Filas en abonos_cartera: ' + filasCartera.length + '\n' +
+      (estadoSec !== 'pagado' ? 'Aparecería en CARTERA con saldo ' + formatCOP(saldoReal) : 'NO iría a cartera (pagada)') + '\n\n' +
+      'Abre la consola (F12) para ver el detalle completo.'
+    );
+    mostrarToast('🧪 Prueba completada — no se guardó nada');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo...'; }
+
+  try {
+    // ── Anti-duplicado: releer el flag desde la base antes de insertar ──
+    const chk = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}&select=registrado_secretaria`, {
+      headers: { 'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY }
+    });
+    if (chk.ok) {
+      const rows = await chk.json();
+      if (rows && rows[0] && rows[0].registrado_secretaria) {
+        o.registrado_secretaria = true;
+        mostrarToast('⚠️ Esta orden ya había sido subida a Secretaria');
+        if (btn) { btn.disabled = true; btn.style.background = '#6B7280'; btn.style.cursor = 'default'; btn.textContent = '✅ Ya en Secretaria'; }
+        return;
+      }
+    }
+
+    const extras = {
+      cliente:       o.cliente   || '',
+      telefono:      o.telefono  || '',
+      direccion:     o.direccion || '',
+      fechaEntrega:  o.fecha_vencimiento ? String(o.fecha_vencimiento).slice(0,10) : null,
+      factura:       numOrden,
+      saldo:         saldoReal,
+      estadoEntrega: 'por-entregar',
+      tipoIngreso:   'venta',
+      recaudoMes:    null,
+      metodoOriginal: o.metodo_pago || '',
+      origenOrden:   numOrden
+    };
+    const notaExt = '\u27E6' + JSON.stringify(extras) + '\u27E7';
+
+    // Se inserta con abono 0 y se ajusta al final segun las filas de cartera
+    // que realmente hayan entrado. Asi nunca queda descuadrado.
+    const payloadSec = {
+      tipo:         'ingreso',
+      descripcion:  descripcion,
+      monto:        totalOrden,
+      metodo:       metodoSec,
+      vendedor:     o.vendedor || '',
+      cliente:      o.cliente  || '',
+      telefono:     o.telefono || '',
+      direccion:    o.direccion|| '',
+      nota:         notaExt,
+      estado:       totalAbonado > 0 ? 'abono' : 'pendiente',
+      abono:        0,
+      fecha:        fechaOrden,
+      hora:         new Date().toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', timeZone:'America/Bogota' }),
+      tipo_ingreso: 'venta',
+      recaudo_mes:  null
+    };
+
+    const resSec = await fetch(`${SUPABASE_URL}/rest/v1/transacciones`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=representation' },
+      body: JSON.stringify(payloadSec)
+    });
+    if (!resSec.ok) {
+      console.error('Error creando transaccion:', resSec.status, await resSec.text());
+      mostrarToast('❌ No se pudo subir a Secretaria. Nada quedó registrado.');
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Subir a Secretaria'; }
+      return;
+    }
+    const secData = await resSec.json();
+    const secId   = secData && secData[0] && secData[0].id;
+    if (!secId) {
+      mostrarToast('❌ Respuesta inesperada de Secretaria. Revisa antes de reintentar.');
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Subir a Secretaria'; }
+      return;
+    }
+
+    // ── Insertar cada pago en abonos_cartera ──
+    let abonadoOk = 0;
+    for (const fila of filasCartera) {
+      try {
+        const rc = await fetch(`${SUPABASE_URL}/rest/v1/abonos_cartera`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+          body: JSON.stringify({ transaccion_id: secId, fecha: fila.fecha, monto: fila.monto, metodo: fila.metodo, nota: fila.nota })
+        });
+        if (rc.ok) abonadoOk += fila.monto;
+        else console.warn('Fila de cartera rechazada:', await rc.text());
+      } catch(e) { console.warn('Fila de cartera — red:', e); }
+    }
+
+    // ── Cuadrar el registro con lo que realmente entró en cartera ──
+    const estadoFinal = abonadoOk >= totalOrden - 1 ? 'pagado' : (abonadoOk > 0 ? 'abono' : 'pendiente');
+    const saldoFinal  = Math.max(0, totalOrden - abonadoOk);
+    extras.saldo = saldoFinal;
+    await fetch(`${SUPABASE_URL}/rest/v1/transacciones?id=eq.${secId}`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify({ abono: abonadoOk, estado: estadoFinal, nota: '\u27E6' + JSON.stringify(extras) + '\u27E7' })
+    });
+
+    // ── Marcar la orden para que no se pueda subir dos veces ──
+    await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
+      body: JSON.stringify({ registrado_secretaria: true })
+    });
+
+    o.registrado_secretaria = true;
+    if (abonadoOk < totalAbonado) {
+      mostrarToast('⚠️ Subida con avisos — revisa los abonos en Secretaria');
+      alert(`La orden ${numOrden} se subió, pero no todos los pagos entraron.\n\nEsperado: ${formatCOP(totalAbonado)}\nRegistrado: ${formatCOP(abonadoOk)}\n\nRevisa la pestaña Cartera en Secretaria y completa el pago faltante a mano.`);
+    } else {
+      mostrarToast(estadoFinal === 'pagado' ? '✅ Subida a Secretaria como PAGADA' : '✅ Subida a Secretaria — queda en cartera');
+    }
+    if (btn) { btn.disabled = true; btn.style.background = '#6B7280'; btn.style.cursor = 'default'; btn.textContent = '✅ Ya en Secretaria'; }
+
+  } catch(e) {
+    console.error('subirASecretaria error:', e);
+    mostrarToast('❌ Error de red al subir a Secretaria');
+    if (btn) { btn.disabled = false; btn.textContent = '📤 Subir a Secretaria'; }
+  }
+}
 
 async function descargarOrdenPNG(pdfUrl, numeroOrden, cliente) {
   try {
