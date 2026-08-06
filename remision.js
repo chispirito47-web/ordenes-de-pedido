@@ -505,6 +505,48 @@ async function generarPDFBlob() {
   doc.text('no aceptamos reclamos ni devoluciones.', margin + 5, y + 12);
   y += 18;
 
+  // ====== CLÁUSULAS ESPECIALES ======
+  const clausulaOutlet   = document.getElementById('clausulaOutlet')?.checked;
+  const clausulaGarantia = document.getElementById('clausulaGarantia')?.checked;
+
+  if (clausulaOutlet || clausulaGarantia) {
+    // Armar líneas dinámicamente
+    const clausLineas = [];
+    if (clausulaOutlet) {
+      clausLineas.push('• Artículos con descuento y/o en la sección Outlet: NO tienen cambio, garantía, ni devolución.');
+    }
+    if (clausulaGarantia) {
+      clausLineas.push('• La garantía incluye defectos de fabricación en madera. NO se cubre garantía por telas,');
+      clausLineas.push('  artículos de decoración y espejos.');
+    }
+
+    const clausH = 8 + clausLineas.length * 4.5 + 4;
+    if (y + clausH + 4 > H - 15) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(254, 247, 230);
+    doc.rect(margin, y, contentW, clausH, 'F');
+    doc.setDrawColor(196, 154, 60);
+    doc.setLineWidth(0.4);
+    doc.rect(margin, y, contentW, clausH);
+    // Banda izquierda
+    doc.setFillColor(196, 154, 60);
+    doc.rect(margin, y, 1.5, clausH, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(28, 26, 23);
+    doc.text('CLÁUSULAS ESPECIALES', margin + 5, y + 5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(80, 65, 50);
+    clausLineas.forEach((l, i) => {
+      doc.text(l, margin + 5, y + 9 + i * 4.5);
+    });
+
+    y += clausH + 4;
+  }
+
   // ====== FIRMAS ======
   // Asegurar espacio
   if (y + 40 > H - 15) { doc.addPage(); y = 20; }
@@ -705,6 +747,8 @@ async function nuevaRemision() {
   limpiarFirma('firmaVendedor');
   document.getElementById('entregaStamp').classList.remove('firmado');
   document.getElementById('refInfo').classList.remove('show');
+  document.getElementById('clausulaOutlet').checked = false;
+  document.getElementById('clausulaGarantia').checked = false;
 
   mostrarToast('✓ Nueva remisión lista');
 }

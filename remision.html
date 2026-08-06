@@ -391,6 +391,28 @@
     <button id="btnQuitarFoto" onclick="quitarFotoEntrega()" style="display:none;margin-top:10px;background:transparent;border:1px solid #D4C9B8;border-radius:8px;padding:8px 14px;font-family:'DM Sans',sans-serif;font-size:12px;color:#9E9488;cursor:pointer">✕ Quitar foto</button>
   </div>
 
+  <!-- CLÁUSULAS ESPECIALES -->
+  <div class="card">
+    <div class="card-title">Cláusulas Especiales <span class="badge">Opcional</span></div>
+    <p style="font-size:13px;color:#9E9488;margin-bottom:14px">Marca las que apliquen según la mercancía entregada. Se imprimirán en el PDF.</p>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:#FEF7E6;border:1px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px;margin-bottom:10px">
+      <input type="checkbox" id="clausulaOutlet" style="margin-top:3px;accent-color:var(--gold);width:18px;height:18px;flex-shrink:0">
+      <span style="font-size:13px;color:var(--brown);line-height:1.6">
+        <strong style="color:var(--dark)">Artículo con descuento / Outlet</strong><br>
+        Los artículos con descuento y/o en la sección Outlet NO tienen cambio, garantía, ni devolución.
+      </span>
+    </label>
+
+    <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:#FEF7E6;border:1px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px">
+      <input type="checkbox" id="clausulaGarantia" style="margin-top:3px;accent-color:var(--gold);width:18px;height:18px;flex-shrink:0">
+      <span style="font-size:13px;color:var(--brown);line-height:1.6">
+        <strong style="color:var(--dark)">Condiciones de Garantía</strong><br>
+        La garantía incluye defectos de fabricación en madera. NO se cubre garantía por telas, artículos de decoración y espejos.
+      </span>
+    </label>
+  </div>
+
   <!-- FIRMAS -->
   <div class="card">
     <div class="card-title">Firmas de Conformidad</div>
