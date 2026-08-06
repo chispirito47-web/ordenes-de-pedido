@@ -747,8 +747,18 @@ async function nuevaRemision() {
   limpiarFirma('firmaVendedor');
   document.getElementById('entregaStamp').classList.remove('firmado');
   document.getElementById('refInfo').classList.remove('show');
-  document.getElementById('clausulaOutlet').checked = false;
-  document.getElementById('clausulaGarantia').checked = false;
+  // Reset cláusulas
+  ['clausulaOutlet','clausulaGarantia'].forEach(id => {
+    document.getElementById(id).checked = false;
+  });
+  ['chkOutlet','chkGarantia'].forEach(id => {
+    const box = document.getElementById(id);
+    if (box) { box.innerHTML=''; box.style.background='#fff'; box.style.border='2px solid #D4C9B8'; box.style.color=''; }
+  });
+  const wO = document.getElementById('wrapOutlet');
+  const wG = document.getElementById('wrapGarantia');
+  if (wO) { wO.style.background='#FEF7E6'; wO.style.border='2px solid #E8C96A'; wO.style.borderLeft='4px solid var(--gold)'; }
+  if (wG) { wG.style.background='#FEF7E6'; wG.style.border='2px solid #E8C96A'; wG.style.borderLeft='4px solid var(--gold)'; }
 
   mostrarToast('✓ Nueva remisión lista');
 }

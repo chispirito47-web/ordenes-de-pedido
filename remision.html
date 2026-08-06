@@ -396,21 +396,23 @@
     <div class="card-title">Cláusulas Especiales <span class="badge">Opcional</span></div>
     <p style="font-size:13px;color:#9E9488;margin-bottom:14px">Marca las que apliquen según la mercancía entregada. Se imprimirán en el PDF.</p>
 
-    <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:#FEF7E6;border:1px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px;margin-bottom:10px">
-      <input type="checkbox" id="clausulaOutlet" style="margin-top:3px;accent-color:var(--gold);width:18px;height:18px;flex-shrink:0">
-      <span style="font-size:13px;color:var(--brown);line-height:1.6">
+    <input type="checkbox" id="clausulaOutlet" style="display:none">
+    <div onclick="toggleClausula('clausulaOutlet', this)" id="wrapOutlet" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:14px 16px;background:#FEF7E6;border:2px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px;margin-bottom:10px;transition:all 0.2s">
+      <div id="chkOutlet" style="width:26px;height:26px;border-radius:6px;border:2px solid #D4C9B8;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;font-size:16px"></div>
+      <div style="font-size:13px;color:var(--brown);line-height:1.6">
         <strong style="color:var(--dark)">Artículo con descuento / Outlet</strong><br>
         Los artículos con descuento y/o en la sección Outlet NO tienen cambio, garantía, ni devolución.
-      </span>
-    </label>
+      </div>
+    </div>
 
-    <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:14px;background:#FEF7E6;border:1px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px">
-      <input type="checkbox" id="clausulaGarantia" style="margin-top:3px;accent-color:var(--gold);width:18px;height:18px;flex-shrink:0">
-      <span style="font-size:13px;color:var(--brown);line-height:1.6">
+    <input type="checkbox" id="clausulaGarantia" style="display:none">
+    <div onclick="toggleClausula('clausulaGarantia', this)" id="wrapGarantia" style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:14px 16px;background:#FEF7E6;border:2px solid #E8C96A;border-left:4px solid var(--gold);border-radius:10px;transition:all 0.2s">
+      <div id="chkGarantia" style="width:26px;height:26px;border-radius:6px;border:2px solid #D4C9B8;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;font-size:16px"></div>
+      <div style="font-size:13px;color:var(--brown);line-height:1.6">
         <strong style="color:var(--dark)">Condiciones de Garantía</strong><br>
         La garantía incluye defectos de fabricación en madera. NO se cubre garantía por telas, artículos de decoración y espejos.
-      </span>
-    </label>
+      </div>
+    </div>
   </div>
 
   <!-- FIRMAS -->
@@ -505,6 +507,30 @@
 <script src="remision.js"></script>
 
 <script>
+function toggleClausula(checkId, wrap) {
+  const chk = document.getElementById(checkId);
+  chk.checked = !chk.checked;
+  const boxId = checkId === 'clausulaOutlet' ? 'chkOutlet' : 'chkGarantia';
+  const box = document.getElementById(boxId);
+  if (chk.checked) {
+    box.innerHTML = '✔';
+    box.style.background = '#27634A';
+    box.style.border = '2px solid #27634A';
+    box.style.color = '#fff';
+    wrap.style.background = '#EDFAF3';
+    wrap.style.border = '2px solid #27634A';
+    wrap.style.borderLeft = '4px solid #27634A';
+  } else {
+    box.innerHTML = '';
+    box.style.background = '#fff';
+    box.style.border = '2px solid #D4C9B8';
+    box.style.color = '';
+    wrap.style.background = '#FEF7E6';
+    wrap.style.border = '2px solid #E8C96A';
+    wrap.style.borderLeft = '4px solid var(--gold)';
+  }
+}
+
 let fotoEntregaData = null;
 function cargarFotoEntrega(input) {
   const file = input.files[0];
