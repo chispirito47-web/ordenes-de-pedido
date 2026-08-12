@@ -807,6 +807,15 @@
           <option>Adriana</option>
         </select>
       </div>
+      <div class="field">
+        <label>¿Cómo nos conoció?</label>
+        <select id="comoNosConoci">
+          <option value="">Seleccionar...</option>
+          <option>Boca a boca / referido</option>
+          <option>Redes sociales</option>
+          <option>Punto físico / pasó por el local</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -1594,6 +1603,7 @@ async function enviarWhatsApp() {
     cedula: datos.cc||'', direccion: datos.direccion||'',
     ciudad: datos.ciudad||'', correo: datos.correo||'',
     vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
+    como_nos_conocio: document.getElementById('comoNosConoci').value||'',
     fecha_orden: datos.fechaFactura||new Date().toISOString().split('T')[0],
     fecha_vencimiento: datos.fechaVencimiento||null,
     productos: getProductos(),
@@ -1779,6 +1789,7 @@ function limpiarTodo() {
   document.getElementById('fechaVencimiento').value='';
   document.getElementById('formaPago').value='';
   document.getElementById('vendedor').value='';
+  document.getElementById('comoNosConoci').value='';
   document.getElementById('clienteNombre').value='';
   document.getElementById('clienteDireccion').value='';
   document.getElementById('clienteCiudad').value='';
