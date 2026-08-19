@@ -1046,7 +1046,7 @@ function formatNumOrden(n) {
 let numeroOrdenActual = 1; // valor numérico actual (para incrementar al guardar)
 
 window.onload = async () => {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   document.getElementById('fechaFactura').value = hoy;
 
   // --- Avisar si quedó alguna orden respaldada localmente por un fallo de guardado anterior ---
@@ -1604,7 +1604,7 @@ async function enviarWhatsApp() {
     ciudad: datos.ciudad||'', correo: datos.correo||'',
     vendedor: datos.vendedor||'', metodo_pago: datos.formaPago||'',
     como_nos_conocio: document.getElementById('comoNosConoci').value||'',
-    fecha_orden: datos.fechaFactura||new Date().toISOString().split('T')[0],
+    fecha_orden: datos.fechaFactura||new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
     fecha_vencimiento: datos.fechaVencimiento||null,
     productos: getProductos(),
     subtotal: limpiarNum(datos.total),
@@ -1785,7 +1785,7 @@ function limpiarTodo() {
     document.getElementById('numeroOrden').value = formatNumOrden(numeroOrdenActual);
     document.getElementById('displayNumero').textContent = formatNumOrden(numeroOrdenActual);
   });
-  document.getElementById('fechaFactura').value=new Date().toISOString().split('T')[0];
+  document.getElementById('fechaFactura').value=new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   document.getElementById('fechaVencimiento').value='';
   document.getElementById('formaPago').value='';
   document.getElementById('vendedor').value='';
