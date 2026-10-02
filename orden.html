@@ -835,7 +835,8 @@
       </div>
       <div class="field">
         <label>Ciudad</label>
-        <input type="text" id="clienteCiudad" placeholder="Montería">
+        <select id="clienteCiudad" onchange="onCiudadChange()"></select>
+        <input type="text" id="clienteCiudadOtra" placeholder="Escribe la ciudad o municipio" style="display:none;margin-top:8px">
       </div>
     </div>
     <div class="form-row cols-3">
@@ -1276,6 +1277,40 @@ function getFirmaDataURL(canvasId) {
 // ========================
 // PDF
 // ========================
+// ========================
+// CIUDAD (lista estandarizada)
+// ========================
+const CIUDADES_OFICIALES = ['Montería', 'Achí', 'Apartadó', 'Arboletes', 'Ayapel', 'Cartagena', 'Caucasia', 'Cereté', 'Chigorodó', 'Ciénaga de Oro', 'Corozal', 'El Bagre', 'La Apartada', 'Lorica', 'Magangué', 'Majagual', 'Montelíbano', 'Nechí', 'Necoclí', 'Planeta Rica', 'Puerto Libertador', 'Sahagún', 'San Bernardo del Viento', 'San Carlos', 'San Marcos', 'San Pedro de Urabá', 'Sincelejo', 'Tarazá', 'Tierralta', 'Tolú', 'Turbo', 'Valencia', 'Zaragoza'];
+function normCiudad(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function initCiudadSelect() {
+  const sel = document.getElementById('clienteCiudad');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecciona la ciudad…</option>' +
+    CIUDADES_OFICIALES.map(c => '<option value="' + c + '">' + c + '</option>').join('') +
+    '<option value="__otra__">Otra…</option>';
+}
+function onCiudadChange() {
+  const otra = document.getElementById('clienteCiudadOtra');
+  const esOtra = document.getElementById('clienteCiudad').value === '__otra__';
+  otra.style.display = esOtra ? '' : 'none';
+  if (esOtra) otra.focus(); else otra.value = '';
+}
+function getCiudadValor() {
+  const v = document.getElementById('clienteCiudad').value;
+  if (v !== '__otra__') return v;
+  const texto = document.getElementById('clienteCiudadOtra').value.trim();
+  const k = normCiudad(texto);
+  const oficial = CIUDADES_OFICIALES.find(c => normCiudad(c) === k);
+  return oficial || texto;
+}
+function resetCiudad() {
+  document.getElementById('clienteCiudad').value = '';
+  onCiudadChange();
+}
+initCiudadSelect();
+
 function getDatos() {
   return {
     numero: document.getElementById('numeroOrden').value || '—',
@@ -1285,7 +1320,7 @@ function getDatos() {
     vendedor: document.getElementById('vendedor').value,
     nombre: document.getElementById('clienteNombre').value,
     direccion: document.getElementById('clienteDireccion').value,
-    ciudad: document.getElementById('clienteCiudad').value,
+    ciudad: getCiudadValor(),
     cc: document.getElementById('clienteCC').value,
     tel: document.getElementById('clienteTel').value,
     telOpcional: document.getElementById('clienteTelOpcional').value,
@@ -1792,7 +1827,7 @@ function limpiarTodo() {
   document.getElementById('comoNosConoci').value='';
   document.getElementById('clienteNombre').value='';
   document.getElementById('clienteDireccion').value='';
-  document.getElementById('clienteCiudad').value='';
+  resetCiudad();
   document.getElementById('clienteCC').value='';
   document.getElementById('clienteTel').value='';
   document.getElementById('clienteTelOpcional').value='';

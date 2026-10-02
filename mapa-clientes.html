@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casa Dams — Mapa de clientes</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css">
+<link rel="stylesheet" href="casa-dams.css">
+<style>
+  /* =====================================================
+     MAPA DE CLIENTES 3D — estilos específicos
+     ===================================================== */
+  body { padding-bottom: 40px; }
+  .glass {
+    background: rgba(253,252,249,.88);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border: 1px solid rgba(212,201,184,.85);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+  }
+  .glass-dark {
+    background: rgba(28,26,23,.82);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border: 1px solid rgba(196,154,60,.35);
+    border-radius: var(--radius);
+    color: var(--cream);
+  }
+
+  /* ---------- HERO (mapa 3D) ---------- */
+  .hero { position: relative; height: calc(100vh - 82px); min-height: 560px; max-height: 860px; background: #E9E3D6; overflow: hidden; }
+  #map { position: absolute; inset: 0; }
+  .maplibregl-ctrl-attrib { font-family: 'DM Sans', sans-serif; font-size: 10px; }
+
+  .hud-title { position: absolute; top: 18px; left: 18px; padding: 16px 20px; max-width: 360px; z-index: 5; }
+  .hud-kicker { font-size: 10.5px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  .hud-h { font-family: 'Playfair Display', serif; font-size: 25px; line-height: 1.15; margin-top: 6px; }
+  .hud-sub { font-size: 12.5px; color: var(--warm-gray-2); margin-top: 6px; line-height: 1.45; }
+
+  .hud-controls { position: absolute; top: 18px; right: 18px; display: flex; gap: 8px; z-index: 7; flex-wrap: wrap; justify-content: flex-end; }
+  .hud-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 600; letter-spacing: .3px;
+    color: var(--gold); background: rgba(28,26,23,.82); border: 1px solid rgba(196,154,60,.4);
+    border-radius: 999px; padding: 9px 15px; cursor: pointer;
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    transition: all .2s var(--ease-smooth);
+  }
+  .hud-btn:hover { background: var(--dark); border-color: var(--gold); transform: translateY(-1px); }
+  .hud-btn.on { background: var(--gold); color: var(--dark); }
+
+  .hud-bottom { position: absolute; left: 18px; bottom: 30px; z-index: 5; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; max-width: calc(100% - 36px); }
+  .mc-seg { display: inline-flex; background: var(--cream-2); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
+  .mc-seg button { border: none; background: transparent; color: var(--brown); font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 999px; cursor: pointer; transition: all .2s var(--ease-smooth); }
+  .mc-seg button.on { background: var(--dark); color: var(--gold); }
+  .mc-field { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--warm-gray); }
+  .mc-field select { font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--dark); background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+  .hud-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--warm-gray); flex-wrap: wrap; }
+  .mc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+  /* cortina de introducción */
+  .curtain { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at 50% 45%, #2A2620 0%, #1C1A17 70%); color: var(--cream); transition: opacity 1.2s var(--ease-smooth), visibility 1.2s; padding: 20px; }
+  .curtain.off { opacity: 0; visibility: hidden; pointer-events: none; }
+  .curtain .c-k { letter-spacing: 6px; font-size: 12px; color: var(--gold); text-transform: uppercase; animation: fadeInUp .9s .1s both; }
+  .curtain .c-h { font-family: 'Playfair Display', serif; font-size: clamp(30px, 5vw, 56px); font-weight: 700; margin-top: 14px; animation: fadeInUp .9s .35s both; }
+  .curtain .c-h em { color: var(--gold); font-style: italic; }
+  .curtain .c-s { margin-top: 14px; color: var(--warm-gray-2); font-size: 14px; animation: fadeInUp .9s .6s both; }
+  .curtain .c-bar { width: 180px; height: 2px; background: rgba(196,154,60,.25); margin-top: 28px; overflow: hidden; border-radius: 2px; }
+  .curtain .c-bar i { display: block; height: 100%; width: 40%; background: var(--gold); animation: slide 1.4s linear infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+  /* etiquetas flotantes sobre las columnas */
+  .pin { cursor: pointer; pointer-events: auto; animation: pinPop .55s var(--ease-bounce) both; }
+  .pin-in { will-change: transform; }
+  @keyframes pinPop { 0% { opacity: 0; scale: .2; } 100% { opacity: 1; scale: 1; } }
+  .pin-label { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; transform: translate(-50%, -100%); background: rgba(28,26,23,.9); color: var(--cream); border: 1px solid rgba(196,154,60,.55); border-radius: 10px; padding: 5px 9px; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.28); transition: background .2s var(--ease-smooth), color .2s var(--ease-smooth); }
+  .pin-label b { font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700; }
+  .pin-label i { font-style: normal; font-size: 11px; color: var(--gold-light); }
+  .pin-label::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: rgba(28,26,23,.9); border-right: 1px solid rgba(196,154,60,.55); border-bottom: 1px solid rgba(196,154,60,.55); transform: translateX(-50%) rotate(45deg); }
+  .pin.mty .pin-label { background: var(--brown); border-color: var(--gold-light); }
+  .pin.mty .pin-label::after { background: var(--brown); border-color: var(--gold-light); }
+  .pin.sel .pin-label, .pin:hover .pin-label { background: var(--gold); color: var(--dark); border-color: #fff; z-index: 20; }
+  .pin.sel .pin-label i, .pin:hover .pin-label i { color: var(--dark); }
+  .pin.sel .pin-label::after, .pin:hover .pin-label::after { background: var(--gold); border-color: #fff; }
+  .pin.small .pin-label { display: none; }
+  .pin.small.sel .pin-label, .pin.small:hover .pin-label { display: inline-flex; }
+  .pin.star .pin-label b::before { content: '✦ '; color: var(--gold-light); }
+
+  /* ---------- panel de detalle ---------- */
+  .detail { position: absolute; top: 70px; right: 18px; bottom: 30px; width: 340px; z-index: 6; padding: 20px 20px 18px; overflow: auto; transform: translateX(calc(100% + 30px)); transition: transform .55s var(--ease-smooth); }
+  .detail.open { transform: none; }
+  .d-close { position: absolute; top: 12px; right: 14px; border: none; background: transparent; font-size: 24px; line-height: 1; color: var(--warm-gray); cursor: pointer; }
+  .d-dep { font-size: 10.5px; letter-spacing: 2.2px; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  .d-name { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; margin-top: 4px; color: var(--dark); }
+  .d-big { font-family: 'Playfair Display', serif; font-size: 38px; font-weight: 700; color: var(--brown); margin-top: 8px; line-height: 1; }
+  .d-bigl { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--warm-gray); margin-top: 5px; }
+  .d-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .d-tile { background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 11px 13px; }
+  .d-tile .l { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--warm-gray); }
+  .d-tile .v { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; color: var(--dark); margin-top: 4px; }
+  .d-spark { margin-top: 16px; }
+  .d-spark .t { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--warm-gray); margin-bottom: 8px; }
+  .d-bars { display: flex; align-items: flex-end; gap: 8px; height: 76px; }
+  .d-bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 10px; color: var(--warm-gray); gap: 4px; }
+  .d-bars i { display: block; width: 100%; background: var(--gold); border-radius: 5px 5px 2px 2px; min-height: 2px; transition: height .8s var(--ease-smooth); }
+  .d-verdict { margin-top: 16px; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; background: var(--gold-tint); border: 1px solid rgba(196,154,60,.35); color: var(--dark); }
+  .d-verdict b { color: var(--brown); }
+  .d-verdict.star { background: rgba(39,99,74,.09); border-color: rgba(39,99,74,.4); }
+  .d-verdict small { display: block; margin-top: 6px; color: var(--warm-gray); font-size: 11.5px; }
+
+  /* ---------- análisis ---------- */
+  .mc-wrap { max-width: 1240px; margin: 0 auto; padding: 30px 24px 0; }
+  .sec-k { font-size: 11px; letter-spacing: 2.4px; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  .sec-h { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .sec-p { color: var(--warm-gray); font-size: 14px; margin: 6px 0 18px; max-width: 760px; line-height: 1.5; }
+
+  .mc-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 30px; }
+  .mc-kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); }
+  .mc-kpi-label { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--warm-gray); }
+  .mc-kpi-val { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; color: var(--brown); margin-top: 8px; line-height: 1.1; }
+  .mc-kpi-val.gold { color: var(--gold); }
+  .mc-kpi-note { font-size: 12px; color: var(--warm-gray); margin-top: 6px; }
+  .mc-kpi-pair { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+  .mc-kpi-pair small { display: block; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; color: var(--warm-gray); letter-spacing: .5px; margin-top: 2px; }
+
+  .insights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 34px; }
+  .insight { background: var(--dark); color: var(--cream); border-radius: var(--radius); padding: 20px 22px; position: relative; overflow: hidden; }
+  .insight::before { content: ''; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle, rgba(196,154,60,.35), transparent 70%); }
+  .insight .n { font-family: 'Playfair Display', serif; font-size: 34px; color: var(--gold); font-weight: 700; }
+  .insight .t { font-size: 13.5px; line-height: 1.5; margin-top: 6px; color: #E8E0D2; }
+  .insight .t b { color: var(--gold-light); }
+
+  .two { display: grid; grid-template-columns: 1.05fr 1fr; gap: 18px; margin-bottom: 34px; align-items: start; }
+  .panel { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow-sm); }
+  .panel h3 { font-family: 'Playfair Display', serif; font-size: 20px; }
+  .panel .hint { font-size: 12.5px; color: var(--warm-gray); margin: 4px 0 14px; line-height: 1.45; }
+
+  .op-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 6px 10px; align-items: center; width: 100%; border: none; background: transparent; text-align: left; font-family: 'DM Sans', sans-serif; padding: 9px 8px; border-radius: 10px; cursor: pointer; color: var(--dark); transition: background .15s; }
+  .op-row:hover { background: var(--gold-tint); }
+  .op-pos { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--warm-gray-2); }
+  .op-name { font-weight: 600; font-size: 14px; }
+  .op-meta { font-size: 11.5px; color: var(--warm-gray); margin-top: 2px; }
+  .op-val { text-align: right; font-weight: 700; font-size: 14px; color: var(--brown); white-space: nowrap; }
+  .op-val small { display: block; font-weight: 500; color: var(--warm-gray); font-size: 11px; }
+  .chip { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .6px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
+  .chip.star { background: rgba(39,99,74,.12); color: var(--green); }
+  .chip.low { background: var(--cream-2); color: var(--warm-gray); }
+  .op-bar { grid-column: 2 / 4; height: 5px; border-radius: 5px; background: var(--cream-2); overflow: hidden; }
+  .op-bar i { display: block; height: 100%; background: var(--gold); border-radius: 5px; }
+  .op-bar i.star { background: var(--green); }
+
+  #scatter { width: 100%; height: auto; display: block; }
+  #scatter text { font-family: 'DM Sans', sans-serif; }
+  #scatter .pt { cursor: pointer; transition: opacity .15s; }
+  #scatter .pt:hover { opacity: .8; }
+
+  .dep-row { display: grid; grid-template-columns: 110px 1fr auto; gap: 12px; align-items: center; padding: 8px 0; font-size: 13.5px; }
+  .dep-bar { height: 10px; border-radius: 6px; background: var(--cream-2); overflow: hidden; }
+  .dep-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--brown), var(--gold)); border-radius: 6px; }
+  .dep-val { text-align: right; font-weight: 600; color: var(--brown); white-space: nowrap; }
+  .dep-val small { display: block; color: var(--warm-gray); font-weight: 400; font-size: 11px; }
+
+  .mc-review table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .mc-review th { text-align: left; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--warm-gray); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .mc-review td { padding: 9px 10px; border-bottom: 1px solid var(--cream-2); }
+  .mc-review .num { text-align: right; }
+  .mc-empty { color: var(--green); font-size: 14px; }
+
+  .mc-error { display: none; background: #FBEAE7; border: 1px solid var(--red); color: var(--red); border-radius: var(--radius-sm); padding: 14px 16px; margin: 14px 24px 0; font-size: 14px; }
+  .mc-error button { margin-left: 12px; background: var(--red); color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-family: 'DM Sans', sans-serif; font-weight: 600; cursor: pointer; }
+  .nogl { display: none; position: absolute; inset: 0; z-index: 9; align-items: center; justify-content: center; text-align: center; padding: 30px; background: var(--cream-2); color: var(--brown); font-size: 15px; }
+
+  @media (max-width: 1000px) {
+    .two { grid-template-columns: 1fr; }
+    .mc-kpis { grid-template-columns: repeat(2, 1fr); }
+    .insights { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .header { padding: 14px 16px; }
+    .hero { height: 78vh; min-height: 520px; }
+    .hud-title { top: 10px; left: 10px; right: 10px; max-width: none; padding: 12px 14px; }
+    .hud-h { font-size: 19px; }
+    .hud-sub { display: none; }
+    .hud-controls { top: auto; bottom: 150px; right: 10px; flex-direction: column; align-items: flex-end; }
+    .hud-btn .tx { display: none; }
+    .hud-bottom { left: 10px; bottom: 18px; max-width: calc(100% - 20px); }
+    .hud-legend { display: none; }
+    .detail { top: auto; left: 10px; right: 10px; bottom: 10px; width: auto; max-height: 56%; transform: translateY(calc(100% + 20px)); }
+    .detail.open { transform: none; }
+    .mc-wrap { padding: 22px 14px 0; }
+    .mc-kpis { grid-template-columns: 1fr; }
+    .sec-h { font-size: 23px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-brand">
+    <a href="index.html" class="back-pill" aria-label="Volver">←</a>
+    <a href="index.html" class="brand-link">
+      <img src="assets/logo-casa-dams.jpeg" class="brand-logo" alt="Casa Dams">
+      <div class="brand-text">
+        <div class="logo">CASA DAMS</div>
+        <div class="tagline">Muebles Nacionales e Importados</div>
+      </div>
+    </a>
+  </div>
+  <div class="header-meta">
+    <div class="doc-type">Análisis</div>
+    <div class="doc-numero" style="font-size:20px">Mapa de clientes</div>
+  </div>
+</div>
+
+<div class="mc-error" id="error">
+  <span id="errorMsg">No se pudieron cargar los datos.</span>
+  <button type="button" id="reintentar">Reintentar</button>
+</div>
+
+<section class="hero" id="hero">
+  <div id="map"></div>
+  <div class="nogl" id="nogl">Tu navegador no pudo activar el mapa 3D (WebGL). El análisis de abajo sigue disponible.</div>
+
+  <div class="hud-title glass-dark">
+    <div class="hud-kicker">Inteligencia comercial</div>
+    <div class="hud-h">¿Dónde están nuestros clientes?</div>
+    <div class="hud-sub">Cada columna es un municipio. Toca una para ver ventas, ticket promedio y potencial.</div>
+  </div>
+
+  <div class="hud-controls">
+    <button class="hud-btn" id="bTour" type="button">▶ <span class="tx">Recorrido</span></button>
+    <button class="hud-btn" id="bIntro" type="button">↻ <span class="tx">Repetir intro</span></button>
+    <button class="hud-btn on" id="b3d" type="button">◈ <span class="tx">Vista 3D</span></button>
+  </div>
+
+  <div class="hud-bottom glass">
+    <div class="mc-seg" role="group" aria-label="Altura de las columnas">
+      <button type="button" id="mValor" class="on">Valor vendido</button>
+      <button type="button" id="mOrdenes">Órdenes</button>
+      <button type="button" id="mTicket">Ticket promedio</button>
+    </div>
+    <label class="mc-field">Mes
+      <select id="fMes"><option value="">Todos</option></select>
+    </label>
+    <div class="hud-legend">
+      <span><i class="mc-dot" style="background:#6B4F35"></i>Montería</span>
+      <span><i class="mc-dot" style="background:#C49A3C"></i>Otros</span>
+      <span><i class="mc-dot" style="background:#E3B341;box-shadow:0 0 0 2px #27634A"></i>✦ Alto potencial</span>
+    </div>
+  </div>
+
+  <aside class="detail glass" id="detail" aria-live="polite"></aside>
+
+  <div class="curtain" id="curtain">
+    <div class="c-k">Casa Dams</div>
+    <div class="c-h">¿Dónde están <em>nuestros clientes</em>?</div>
+    <div class="c-s" id="curtainMsg">Preparando el mapa…</div>
+    <div class="c-bar"><i></i></div>
+  </div>
+</section>
+
+<div class="mc-wrap" id="analisis" style="display:none">
+
+  <div class="mc-kpis" id="kpis">
+    <div class="mc-kpi">
+      <div class="mc-kpi-label">Valor fuera de Montería</div>
+      <div class="mc-kpi-val gold" id="kFuera">—</div>
+      <div class="mc-kpi-note" id="kFueraNota"></div>
+    </div>
+    <div class="mc-kpi">
+      <div class="mc-kpi-label">Ticket promedio</div>
+      <div class="mc-kpi-pair">
+        <div class="mc-kpi-val gold" id="kTicketFuera">—<small>Fuera de Montería</small></div>
+        <div class="mc-kpi-val" id="kTicketDentro">—<small>En Montería</small></div>
+      </div>
+    </div>
+    <div class="mc-kpi">
+      <div class="mc-kpi-label">Municipios con ventas</div>
+      <div class="mc-kpi-val" id="kMunis">—</div>
+      <div class="mc-kpi-note" id="kMunisNota"></div>
+    </div>
+    <div class="mc-kpi">
+      <div class="mc-kpi-label">Órdenes sin ciudad reconocida</div>
+      <div class="mc-kpi-val" id="kSin">—</div>
+      <div class="mc-kpi-note" id="kSinNota"></div>
+    </div>
+  </div>
+
+  <div class="sec-k">Lectura rápida</div>
+  <h2 class="sec-h">Lo que dicen los números</h2>
+  <p class="sec-p">Frases generadas con los datos del mes que tengas seleccionado en el mapa.</p>
+  <div class="insights" id="insights"></div>
+
+  <div class="sec-k">Oportunidad</div>
+  <h2 class="sec-h">Pocas ventas, mucho valor</h2>
+  <p class="sec-p">Montería manda en volumen, pero el volumen no lo es todo. Aquí se ve <b>cuánto gasta cada cliente por compra</b> en cada municipio. Donde el ticket es mucho mayor que el de Montería, aunque haya pocas órdenes, hay clientes con capacidad de compra.</p>
+  <div class="two">
+    <div class="panel">
+      <h3>Ranking por ticket promedio</h3>
+      <div class="hint">Fuera de Montería. ✦ = ticket al menos 1,5 veces el de Montería. Toca un municipio para verlo en el mapa.</div>
+      <div id="oportunidad"></div>
+    </div>
+    <div class="panel">
+      <h3>Órdenes vs. ticket</h3>
+      <div class="hint">Cada burbuja es un municipio; su tamaño es el valor vendido. La zona dorada es la de alto ticket con pocas órdenes.</div>
+      <svg id="scatter" viewBox="0 0 640 400" role="img" aria-label="Gráfico de órdenes contra ticket promedio por municipio"></svg>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="panel">
+      <h3>Por departamento</h3>
+      <div class="hint">Valor vendido y ticket promedio según el departamento del municipio.</div>
+      <div id="deptos"></div>
+    </div>
+    <div class="panel mc-review" id="revision">
+      <h3>Datos por revisar</h3>
+      <div class="hint">Órdenes que no se pueden ubicar en el mapa. Corrige la ciudad en la orden original para que cuenten.</div>
+      <div id="revisionBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
+<script src="casa-dams.js"></script>
+<script>
+/* =========================================================
+   LUGARES — municipios con variantes de escritura y centro aproximado.
+   Las variantes van sin tildes, en minúscula.
+   ========================================================= */
+const LUGARES = [
+  { nombre: 'Montería',                 dep: 'Córdoba',   lat: 8.7479, lng: -75.8814, variantes: ['monteria'] },
+  { nombre: 'Cereté',                   dep: 'Córdoba',   lat: 8.8850, lng: -75.7900, variantes: ['cerete'] },
+  { nombre: 'Lorica',                   dep: 'Córdoba',   lat: 9.2400, lng: -75.8140, variantes: ['lorica'] },
+  { nombre: 'Sahagún',                  dep: 'Córdoba',   lat: 8.9470, lng: -75.4430, variantes: ['sahagun'] },
+  { nombre: 'Planeta Rica',             dep: 'Córdoba',   lat: 8.4090, lng: -75.5840, variantes: ['planeta rica', 'planetarica', 'planeta'] },
+  { nombre: 'Montelíbano',              dep: 'Córdoba',   lat: 7.9790, lng: -75.4160, variantes: ['montelibano', 'montelivano'] },
+  { nombre: 'La Apartada',              dep: 'Córdoba',   lat: 8.0490, lng: -75.3330, variantes: ['la apartada', 'la aparatada'] },
+  { nombre: 'San Bernardo del Viento',  dep: 'Córdoba',   lat: 9.3560, lng: -75.9530, variantes: ['san bernardo del viento'] },
+  { nombre: 'San Carlos',               dep: 'Córdoba',   lat: 8.7960, lng: -75.6970, variantes: ['san carlos'] },
+  { nombre: 'Ciénaga de Oro',           dep: 'Córdoba',   lat: 8.8750, lng: -75.6200, variantes: ['cienaga de oro'] },
+  { nombre: 'Tierralta',                dep: 'Córdoba',   lat: 8.1730, lng: -76.0610, variantes: ['tierralta'] },
+  { nombre: 'Puerto Libertador',        dep: 'Córdoba',   lat: 7.8880, lng: -75.6720, variantes: ['puerto libertador'] },
+  { nombre: 'Ayapel',                   dep: 'Córdoba',   lat: 8.3130, lng: -75.1500, variantes: ['ayapel'] },
+  { nombre: 'Valencia',                 dep: 'Córdoba',   lat: 8.2560, lng: -76.1490, variantes: ['valencia'] },
+  { nombre: 'Caucasia',                 dep: 'Antioquia', lat: 7.9840, lng: -75.1930, variantes: ['caucasia'] },
+  { nombre: 'El Bagre',                 dep: 'Antioquia', lat: 7.5970, lng: -74.8090, variantes: ['el bagre', 'bagre'] },
+  { nombre: 'Nechí',                    dep: 'Antioquia', lat: 8.0940, lng: -74.7760, variantes: ['nechi'] },
+  { nombre: 'Zaragoza',                 dep: 'Antioquia', lat: 7.4890, lng: -74.8670, variantes: ['zaragoza'] },
+  { nombre: 'Tarazá',                   dep: 'Antioquia', lat: 7.5760, lng: -75.4000, variantes: ['taraza'] },
+  { nombre: 'Apartadó',                 dep: 'Antioquia', lat: 7.8830, lng: -76.6260, variantes: ['apartado'] },
+  { nombre: 'Arboletes',                dep: 'Antioquia', lat: 8.8500, lng: -76.4270, variantes: ['arboletes'] },
+  { nombre: 'Turbo',                    dep: 'Antioquia', lat: 8.0930, lng: -76.7280, variantes: ['turbo'] },
+  { nombre: 'Necoclí',                  dep: 'Antioquia', lat: 8.4260, lng: -76.7870, variantes: ['necocli'] },
+  { nombre: 'San Pedro de Urabá',       dep: 'Antioquia', lat: 8.2740, lng: -76.3790, variantes: ['san pedro de uraba', 'san pedro'] },
+  { nombre: 'Chigorodó',                dep: 'Antioquia', lat: 7.6670, lng: -76.6810, variantes: ['chigorodo'] },
+  { nombre: 'Sincelejo',                dep: 'Sucre',     lat: 9.3047, lng: -75.3978, variantes: ['sincelejo'] },
+  { nombre: 'San Marcos',               dep: 'Sucre',     lat: 8.6610, lng: -75.1330, variantes: ['san marcos'] },
+  { nombre: 'Tolú',                     dep: 'Sucre',     lat: 9.5240, lng: -75.5810, variantes: ['tolu'] },
+  { nombre: 'Corozal',                  dep: 'Sucre',     lat: 9.3180, lng: -75.2930, variantes: ['corozal'] },
+  { nombre: 'Majagual',                 dep: 'Sucre',     lat: 8.5420, lng: -74.6310, variantes: ['majagual'] },
+  { nombre: 'Achí',                     dep: 'Bolívar',   lat: 8.5700, lng: -74.5580, variantes: ['achi'] },
+  { nombre: 'Magangué',                 dep: 'Bolívar',   lat: 9.2420, lng: -74.7540, variantes: ['magangue'] },
+  { nombre: 'Cartagena',                dep: 'Bolívar',   lat: 10.3910, lng: -75.4794, variantes: ['cartagena'] }
+];
+const DEPARTAMENTOS = ['antioquia', 'cordoba', 'sucre', 'bolivar', 'colombia'];
+const MONTERIA = 'Montería';
+
+function normalizar(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+const INDICE = new Map();
+LUGARES.forEach(l => {
+  INDICE.set(normalizar(l.nombre), l);
+  l.variantes.forEach(v => INDICE.set(normalizar(v), l));
+});
+function resolverLugar(texto) {
+  let k = normalizar(texto);
+  if (!k) return null;
+  if (INDICE.has(k)) return INDICE.get(k);
+  const partes = k.split(' ');
+  while (partes.length > 1 && DEPARTAMENTOS.includes(partes[partes.length - 1])) {
+    partes.pop();
+    k = partes.join(' ');
+    if (INDICE.has(k)) return INDICE.get(k);
+  }
+  return null;
+}
+
+/* ---------- utilidades ---------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtM(n) { return '$' + (n / 1e6).toLocaleString('es-CO', { maximumFractionDigits: 1 }) + ' M'; }
+function fmtX(n) { return n.toLocaleString('es-CO', { maximumFractionDigits: 1 }) + '×'; }
+function pl(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+function nombreMes(ym, corto) {
+  const [y, m] = ym.split('-').map(Number);
+  const t = new Date(y, m - 1, 1).toLocaleDateString('es-CO', corto ? { month: 'short' } : { month: 'long', year: 'numeric' });
+  return t.charAt(0).toUpperCase() + t.slice(1).replace('.', '');
+}
+function ease(t) { return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+function countUp(el, hasta, fmt, dur) {
+  const t0 = performance.now();
+  (function paso(t) {
+    const k = Math.min(1, (t - t0) / (dur || 900));
+    el.textContent = fmt(hasta * ease(k));
+    if (k < 1) requestAnimationFrame(paso);
+  })(t0);
+}
+
+/* ---------- estado ---------- */
+let FILAS = [];
+let MESES = [];
+let medida = 'valor';          // 'valor' | 'ordenes' | 'ticket'
+let map = null, mapaListo = false, sinWebGL = false;
+let DATOS = null;              // resultado de agregar()
+let seleccion = null;
+let pins = [];
+const renderH = new Map();     // alturas actuales (animadas)
+let corrida = 0;               // cancela intro/recorrido
+let animH = 0;
+const RADIO = 4200;
+const ALTURA_MAX = 50000;
+const COLOR = { mty: '#6B4F35', otro: '#C49A3C', star: '#E3B341', sel: '#F5D77A' };
+const VISTA_REGION = { center: [-75.45, 8.35], zoom: 7.6, pitch: 58, bearing: -18 };
+
+/* ---------- datos (solo ciudad, valor_total, fecha_orden) ---------- */
+async function cargarDatos() {
+  const salida = [];
+  const PAGINA = 1000;
+  for (let desde = 0; ; desde += PAGINA) {
+    const res = await fetch(`${SUPA_URL}/rest/v1/pedidos?select=ciudad,valor_total,fecha_orden&order=fecha_orden.asc`, {
+      headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY, Range: `${desde}-${desde + PAGINA - 1}` }
+    });
+    if (!res.ok) throw new Error('Respuesta ' + res.status);
+    const lote = await res.json();
+    lote.forEach(r => salida.push({
+      ciudad: (r.ciudad || '').trim(),
+      valor: Number(r.valor_total) || 0,
+      mes: r.fecha_orden ? String(r.fecha_orden).slice(0, 7) : ''
+    }));
+    if (lote.length < PAGINA) break;
+  }
+  return salida;
+}
+
+function agregar(mes) {
+  const porLugar = new Map();
+  const sinCiudad = { ordenes: 0, valor: 0 };
+  const noReconocidas = new Map();
+  FILAS.forEach(f => {
+    if (mes && f.mes !== mes) return;
+    if (!f.ciudad) { sinCiudad.ordenes++; sinCiudad.valor += f.valor; return; }
+    const lugar = resolverLugar(f.ciudad);
+    if (!lugar) {
+      const n = noReconocidas.get(f.ciudad) || { ordenes: 0, valor: 0 };
+      n.ordenes++; n.valor += f.valor;
+      noReconocidas.set(f.ciudad, n);
+      return;
+    }
+    const a = porLugar.get(lugar.nombre) || { lugar, valor: 0, ordenes: 0 };
+    a.valor += f.valor; a.ordenes++;
+    porLugar.set(lugar.nombre, a);
+  });
+  const lista = [...porLugar.values()];
+  lista.forEach(a => { a.ticket = a.valor / a.ordenes; });
+  const mty = porLugar.get(MONTERIA) || { valor: 0, ordenes: 0, ticket: 0 };
+  const fuera = lista.filter(a => a.lugar.nombre !== MONTERIA);
+  const fueraTot = fuera.reduce((s, a) => ({ valor: s.valor + a.valor, ordenes: s.ordenes + a.ordenes }), { valor: 0, ordenes: 0 });
+  const totalValor = mty.valor + fueraTot.valor;
+  lista.forEach(a => {
+    a.pct = totalValor ? a.valor / totalValor : 0;
+    a.ratio = mty.ticket ? a.ticket / mty.ticket : 0;
+    a.star = a.lugar.nombre !== MONTERIA && mty.ticket > 0 && a.ratio >= 1.5;
+  });
+  return { porLugar, lista, mty, fuera, fueraTot, totalValor, sinCiudad, noReconocidas };
+}
+
+function valorMedida(a) { return medida === 'valor' ? a.valor : medida === 'ordenes' ? a.ordenes : a.ticket; }
+function alturaDe(a) {
+  const max = Math.max(1, ...DATOS.lista.map(valorMedida));
+  return 3500 + (ALTURA_MAX - 3500) * Math.pow(valorMedida(a) / max, 0.62);
+}
+function colorDe(a) { return a.lugar.nombre === MONTERIA ? COLOR.mty : a.star ? COLOR.star : COLOR.otro; }
+function etiquetaMedida(a) {
+  return medida === 'valor' ? fmtM(a.valor) : medida === 'ordenes' ? pl(a.ordenes, 'orden', 'órdenes') : fmtM(a.ticket);
+}
+
+/* ---------- geometría de las columnas ---------- */
+function circulo(lng, lat, r, n) {
+  const dLat = r / 111320, dLng = r / (111320 * Math.cos(lat * Math.PI / 180));
+  const ring = [];
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    ring.push([lng + Math.cos(t) * dLng, lat + Math.sin(t) * dLat]);
+  }
+  return [ring];
+}
+function geojsonColumnas() {
+  return {
+    type: 'FeatureCollection',
+    features: DATOS.lista.map(a => ({
+      type: 'Feature',
+      properties: {
+        name: a.lugar.nombre,
+        h: renderH.get(a.lugar.nombre) || 0,
+        c: colorDe(a),
+        sel: a.lugar.nombre === seleccion ? 1 : 0
+      },
+      geometry: { type: 'Polygon', coordinates: circulo(a.lugar.lng, a.lugar.lat, a.lugar.nombre === MONTERIA ? RADIO * 1.35 : RADIO, 28) }
+    }))
+  };
+}
+function pintarColumnas() {
+  if (!mapaListo || !DATOS) return;
+  const src = map.getSource('cols');
+  if (src) src.setData(geojsonColumnas());
+}
+function animarAlturas(desdeCero, dur) {
+  const id = ++animH;
+  const t0 = performance.now();
+  const objetivo = new Map(DATOS.lista.map(a => [a.lugar.nombre, alturaDe(a)]));
+  const ini = new Map(DATOS.lista.map(a => [a.lugar.nombre, desdeCero ? 0 : (renderH.get(a.lugar.nombre) || 0)]));
+  return new Promise(res => {
+    (function paso(t) {
+      if (id !== animH) return res();
+      const k = Math.min(1, (t - t0) / dur), e = ease(k);
+      objetivo.forEach((h, n) => renderH.set(n, ini.get(n) + (h - ini.get(n)) * e));
+      pintarColumnas();
+      posicionarPins();
+      if (k < 1) requestAnimationFrame(paso); else res();
+    })(t0);
+  });
+}
+
+/* ---------- etiquetas flotantes ---------- */
+function crearPins() {
+  pins.forEach(p => p.marker.remove());
+  pins = [];
+  const orden = DATOS.lista.slice().sort((a, b) => valorMedida(b) - valorMedida(a));
+  const top = new Set(orden.slice(0, 6).map(a => a.lugar.nombre));
+  orden.forEach((a, i) => {
+    const el = document.createElement('div');
+    el.className = 'pin' + (a.lugar.nombre === MONTERIA ? ' mty' : '') + (a.star ? ' star' : '') + (top.has(a.lugar.nombre) ? '' : ' small');
+    el.style.animationDelay = (i * 90) + 'ms';
+    el.innerHTML = `<div class="pin-in"><div class="pin-label"><b>${esc(a.lugar.nombre)}</b><i>${esc(etiquetaMedida(a))}</i></div></div>`;
+    el.addEventListener('click', e => { e.stopPropagation(); corrida++; seleccionar(a.lugar.nombre); });
+    const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([a.lugar.lng, a.lugar.lat]).addTo(map);
+    pins.push({ nombre: a.lugar.nombre, el, inner: el.firstChild, marker, top: top.has(a.lugar.nombre) });
+  });
+  posicionarPins();
+}
+function posicionarPins() {
+  if (!mapaListo || !pins.length || !DATOS) return;
+  const z = map.getZoom(), pitch = map.getPitch() * Math.PI / 180;
+  const grande = z >= 8.6;
+  pins.forEach(p => {
+    const a = DATOS.porLugar.get(p.nombre);
+    if (!a) return;
+    const pxPorM = 512 * Math.pow(2, z) / (40075016.686 * Math.cos(a.lugar.lat * Math.PI / 180));
+    const h = renderH.get(p.nombre) || 0;
+    p.inner.style.transform = `translateY(${-(h * pxPorM * Math.sin(pitch)).toFixed(1)}px)`;
+    p.el.classList.toggle('small', !(p.top || grande));
+    p.el.classList.toggle('sel', p.nombre === seleccion);
+  });
+}
+
+/* ---------- panel de detalle ---------- */
+function veredicto(a) {
+  const d = DATOS;
+  const muestra = a.ordenes < 3 ? `<small>Muestra pequeña (${pl(a.ordenes, 'orden', 'órdenes')}): tómalo como una señal, no como una certeza.</small>` : '';
+  if (a.lugar.nombre === MONTERIA) {
+    return { cls: '', html: `<b>Tu mercado principal.</b> Concentra el ${Math.round(a.pct * 100)}% del valor vendido con un ticket de ${fmtM(a.ticket)}.${muestra}` };
+  }
+  if (a.star) {
+    return { cls: 'star', html: `<b>✦ Alto potencial.</b> Cada compra aquí vale ${fmtX(a.ratio)} lo de Montería (${fmtM(a.ticket)} vs ${fmtM(d.mty.ticket)}). Con ${pl(a.ordenes, 'orden', 'órdenes')} ya suma ${fmtM(a.valor)}: hay clientes con capacidad de compra.${muestra}` };
+  }
+  if (a.ratio >= 0.8) {
+    return { cls: '', html: `<b>Ticket similar al de Montería</b> (${fmtX(a.ratio)}). Un mercado sano si se logra más volumen.${muestra}` };
+  }
+  return { cls: '', html: `<b>Ticket por debajo de Montería</b> (${fmtX(a.ratio)}). Aquí el valor viene del volumen, no de la compra individual.${muestra}` };
+}
+function serieMeses(nombre) {
+  return MESES.map(m => FILAS.filter(f => f.mes === m && f.ciudad && (resolverLugar(f.ciudad) || {}).nombre === nombre)
+    .reduce((s, f) => s + f.valor, 0));
+}
+function abrirDetalle(a) {
+  const v = veredicto(a);
+  const serie = serieMeses(a.lugar.nombre);
+  const maxS = Math.max(1, ...serie);
+  $('detail').innerHTML = `
+    <button class="d-close" type="button" aria-label="Cerrar" id="dClose">×</button>
+    <div class="d-dep">${esc(a.lugar.dep)}${a.star ? ' · ✦ alto potencial' : ''}</div>
+    <div class="d-name">${esc(a.lugar.nombre)}</div>
+    <div class="d-big" id="dBig">$0</div>
+    <div class="d-bigl">Valor vendido</div>
+    <div class="d-grid">
+      <div class="d-tile"><div class="l">Órdenes totales</div><div class="v" id="dOrd">0</div></div>
+      <div class="d-tile"><div class="l">Ticket promedio</div><div class="v" id="dTic">$0</div></div>
+      <div class="d-tile"><div class="l">% del valor total</div><div class="v" id="dPct">0%</div></div>
+      <div class="d-tile"><div class="l">Ticket vs. Montería</div><div class="v">${a.lugar.nombre === MONTERIA ? '—' : fmtX(a.ratio)}</div></div>
+    </div>
+    <div class="d-spark"><div class="t">Valor por mes</div>
+      <div class="d-bars">${serie.map((s, i) => `<div title="${esc(nombreMes(MESES[i]))}: ${fmtM(s)}"><i style="height:0" data-h="${Math.max(3, s / maxS * 100)}%"></i>${esc(nombreMes(MESES[i], true))}</div>`).join('')}</div>
+    </div>
+    <div class="d-verdict ${v.cls}">${v.html}</div>`;
+  $('detail').classList.add('open');
+  $('dClose').addEventListener('click', cerrarDetalle);
+  countUp($('dBig'), a.valor, n => formatPesos(n), 1000);
+  countUp($('dOrd'), a.ordenes, n => String(Math.round(n)), 800);
+  countUp($('dTic'), a.ticket, n => fmtM(n), 900);
+  countUp($('dPct'), a.pct * 100, n => Math.round(n) + '%', 900);
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    $('detail').querySelectorAll('.d-bars i').forEach(i => { i.style.height = i.dataset.h; })));
+}
+function cerrarDetalle() {
+  seleccion = null;
+  $('detail').classList.remove('open');
+  pintarColumnas(); posicionarPins();
+}
+
+/* ---------- navegación del mapa ---------- */
+function volar(opts) {
+  return new Promise(res => {
+    if (!mapaListo) return res();
+    map.once('moveend', () => res());
+    map.flyTo(Object.assign({ essential: true, curve: 1.5 }, opts));
+  });
+}
+async function seleccionar(nombre, opts) {
+  const a = DATOS.porLugar.get(nombre);
+  if (!a) return;
+  seleccion = nombre;
+  pintarColumnas(); posicionarPins();
+  abrirDetalle(a);
+  const en3d = $('b3d').classList.contains('on');
+  const bearing = -25 + ((a.lugar.lng * -100) % 50 + 50) % 50;
+  await volar({ center: [a.lugar.lng, a.lugar.lat], zoom: (opts && opts.zoom) || 9.3, pitch: en3d ? 62 : 0, bearing: en3d ? bearing : 0, duration: (opts && opts.duration) || 2200 });
+}
+
+/* ---------- secuencias ---------- */
+async function intro() {
+  const tok = ++corrida;
+  cerrarDetalle();
+  $('bTour').classList.remove('on');
+  const cortina = $('curtain');
+  cortina.classList.remove('off');
+  $('curtainMsg').textContent = 'Preparando el mapa…';
+  animH++;
+  renderH.forEach((_, k) => renderH.set(k, 0));
+  pintarColumnas();
+  pins.forEach(p => { p.el.style.visibility = 'hidden'; });
+  if (mapaListo) map.jumpTo({ center: [-74.3, 4.6], zoom: 4.6, pitch: 0, bearing: 0 });
+  await sleep(1700);
+  if (tok !== corrida) return;
+  $('curtainMsg').textContent = 'Viajando a Córdoba…';
+  cortina.classList.add('off');
+  await sleep(500);
+  await volar(Object.assign({ duration: 4800 }, VISTA_REGION));
+  if (tok !== corrida) return;
+  pins.forEach((p, i) => {
+    p.el.style.visibility = '';
+    p.el.style.animation = 'none'; void p.el.offsetWidth;
+    p.el.style.animation = ''; p.el.style.animationDelay = (i * 110) + 'ms';
+  });
+  await animarAlturas(true, 1900);
+  if (tok !== corrida) return;
+  await sleep(600);
+  if (tok !== corrida) return;
+  await seleccionar(MONTERIA, { zoom: 8.9, duration: 2600 });
+}
+async function recorrido() {
+  const tok = ++corrida;
+  $('bTour').classList.add('on');
+  const resto = DATOS.lista.filter(a => a.lugar.nombre !== MONTERIA)
+    .sort((a, b) => (Number(b.star) - Number(a.star)) || (b.valor - a.valor)).slice(0, 5);
+  cerrarDetalle();
+  await volar(Object.assign({ duration: 2200 }, VISTA_REGION));
+  for (const a of [DATOS.porLugar.get(MONTERIA)].concat(resto)) {
+    if (tok !== corrida || !a) break;
+    await seleccionar(a.lugar.nombre, { duration: 3200, zoom: 9.2 });
+    if (tok !== corrida) break;
+    await sleep(3400);
+  }
+  if (tok === corrida) { cerrarDetalle(); await volar(Object.assign({ duration: 2800 }, VISTA_REGION)); }
+  if (tok === corrida) $('bTour').classList.remove('on');
+}
+
+/* ---------- mapa ---------- */
+function iniciarMapa() {
+  return new Promise(resolver => {
+    try {
+      map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.openfreemap.org/styles/positron',
+        center: [-74.3, 4.6], zoom: 4.6, pitch: 0, bearing: 0,
+        maxPitch: 78, minZoom: 3.5, antialias: true, attributionControl: false
+      });
+    } catch (e) {
+      console.error(e);
+      sinWebGL = true; $('nogl').style.display = 'flex'; $('curtain').classList.add('off');
+      return resolver();
+    }
+    map.addControl(new maplibregl.AttributionControl({ compact: true }));
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+    map.on('error', e => console.warn('mapa:', e && e.error && e.error.message));
+    map.on('load', () => {
+      try {
+        const demFuente = { type: 'raster-dem', tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'], tileSize: 512, maxzoom: 12, encoding: 'terrarium', attribution: '© Mapterhorn' };
+        map.addSource('dem', demFuente);
+        map.addSource('dem-sombra', demFuente);   // fuente aparte para el sombreado (mejor calidad)
+        map.addLayer({ id: 'relieve', type: 'hillshade', source: 'dem-sombra', paint: { 'hillshade-exaggeration': 0.45, 'hillshade-shadow-color': '#6B4F35', 'hillshade-highlight-color': '#FFFBF0', 'hillshade-accent-color': '#B9A98C' } }, 'water');
+        map.setTerrain({ source: 'dem', exaggeration: 1.4 });
+      } catch (e) { console.warn('Relieve no disponible:', e); }
+      map.addSource('cols', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'cols', type: 'fill-extrusion', source: 'cols',
+        paint: {
+          'fill-extrusion-color': ['case', ['==', ['get', 'sel'], 1], COLOR.sel, ['get', 'c']],
+          'fill-extrusion-height': ['get', 'h'],
+          'fill-extrusion-base': 0,
+          'fill-extrusion-opacity': 0.92,
+          'fill-extrusion-vertical-gradient': true
+        }
+      });
+      map.on('click', 'cols', e => { const f = e.features && e.features[0]; if (f) { corrida++; seleccionar(f.properties.name); } });
+      map.on('mouseenter', 'cols', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'cols', () => { map.getCanvas().style.cursor = ''; });
+      map.on('move', posicionarPins);
+      map.on('dragstart', () => { corrida++; $('bTour').classList.remove('on'); });
+      mapaListo = true;
+      resolver();
+    });
+  });
+}
+
+/* ---------- análisis ---------- */
+function renderAnalisis() {
+  const d = DATOS;
+  const { lista, mty, fuera, fueraTot, totalValor, sinCiudad, noReconocidas } = d;
+
+  // indicadores
+  const pct = totalValor ? Math.round(fueraTot.valor / totalValor * 100) : 0;
+  countUp($('kFuera'), pct, n => Math.round(n) + '%', 900);
+  $('kFueraNota').textContent = `${fmtM(fueraTot.valor)} en ${pl(fueraTot.ordenes, 'orden', 'órdenes')} (de ${fmtM(totalValor)} con ciudad reconocida)`;
+  $('kTicketFuera').firstChild.nodeValue = fueraTot.ordenes ? fmtM(fueraTot.valor / fueraTot.ordenes) : '—';
+  $('kTicketDentro').firstChild.nodeValue = mty.ordenes ? fmtM(mty.valor / mty.ordenes) : '—';
+  $('kMunis').textContent = lista.length;
+  $('kMunisNota').textContent = `${fuera.length} fuera de Montería`;
+  const nNoRec = [...noReconocidas.values()].reduce((s, n) => s + n.ordenes, 0);
+  $('kSin').textContent = sinCiudad.ordenes + nNoRec;
+  $('kSinNota').textContent = `${sinCiudad.ordenes} sin ciudad · ${nNoRec} con nombre no reconocido`;
+
+  // lectura rápida
+  const estrellas = fuera.filter(a => a.star);
+  const mejor = fuera.slice().sort((a, b) => b.ticket - a.ticket)[0];
+  const ins = [];
+  ins.push({ n: totalValor && mty.valor ? Math.round(mty.valor / totalValor * 100) + '%' : '—',
+    t: mty.ordenes ? `del valor sale de <b>Montería</b>, con <b>${pl(mty.ordenes, 'orden', 'órdenes')}</b> y un ticket de <b>${fmtM(mty.ticket)}</b>.` : 'No hay órdenes de Montería en este periodo.' });
+  ins.push({ n: mejor ? fmtX(mejor.ratio) : '—',
+    t: mejor ? `es el ticket de <b>${esc(mejor.lugar.nombre)}</b> frente al de Montería (${fmtM(mejor.ticket)} por compra, ${pl(mejor.ordenes, 'orden', 'órdenes')}).` : 'Sin municipios fuera de Montería.' });
+  ins.push({ n: String(estrellas.length),
+    t: estrellas.length
+      ? `municipios de <b>alto potencial</b> (ticket ≥ 1,5× Montería): ${estrellas.slice().sort((a, b) => b.valor - a.valor).slice(0, 4).map(a => esc(a.lugar.nombre)).join(', ')}${estrellas.length > 4 ? '…' : ''}. Suman <b>${fmtM(estrellas.reduce((s, a) => s + a.valor, 0))}</b>.`
+      : 'municipios con ticket por encima de 1,5× el de Montería en este periodo.' });
+  $('insights').innerHTML = ins.map(i => `<div class="insight"><div class="n">${i.n}</div><div class="t">${i.t}</div></div>`).join('');
+
+  // ranking por ticket (fuera de Montería)
+  const rk = fuera.slice().sort((a, b) => b.ticket - a.ticket);
+  const maxT = Math.max(1, ...rk.map(a => a.ticket));
+  $('oportunidad').innerHTML = rk.length ? rk.map((a, i) => `
+    <button type="button" class="op-row" data-n="${esc(a.lugar.nombre)}">
+      <span class="op-pos">${i + 1}</span>
+      <span><span class="op-name">${esc(a.lugar.nombre)}</span>${a.star ? '<span class="chip star">✦ POTENCIAL</span>' : ''}${a.ordenes < 3 ? '<span class="chip low">MUESTRA PEQUEÑA</span>' : ''}
+        <div class="op-meta">${pl(a.ordenes, 'orden', 'órdenes')} · ${fmtM(a.valor)} vendidos · ${esc(a.lugar.dep)}</div></span>
+      <span class="op-val">${fmtM(a.ticket)}<small>${fmtX(a.ratio)} Montería</small></span>
+      <span class="op-bar"><i class="${a.star ? 'star' : ''}" style="width:${Math.max(2, a.ticket / maxT * 100)}%"></i></span>
+    </button>`).join('') : '<div class="hint">Sin municipios fuera de Montería en este periodo.</div>';
+  $('oportunidad').querySelectorAll('.op-row').forEach(b => b.addEventListener('click', () => irAlMapa(b.dataset.n)));
+
+  dibujarDispersion(lista, mty);
+
+  // por departamento
+  const deps = new Map();
+  lista.forEach(a => {
+    const x = deps.get(a.lugar.dep) || { valor: 0, ordenes: 0 };
+    x.valor += a.valor; x.ordenes += a.ordenes; deps.set(a.lugar.dep, x);
+  });
+  const dl = [...deps.entries()].sort((a, b) => b[1].valor - a[1].valor);
+  const maxD = Math.max(1, ...dl.map(x => x[1].valor));
+  $('deptos').innerHTML = dl.map(([n, x]) => `
+    <div class="dep-row"><div><b>${esc(n)}</b></div>
+      <div class="dep-bar"><i style="width:${x.valor / maxD * 100}%"></i></div>
+      <div class="dep-val">${fmtM(x.valor)}<small>${pl(x.ordenes, 'orden', 'órdenes')} · ticket ${fmtM(x.valor / x.ordenes)}</small></div></div>`).join('');
+
+  // datos por revisar
+  const filas = [];
+  if (sinCiudad.ordenes) filas.push(['(sin ciudad)', sinCiudad.ordenes, sinCiudad.valor]);
+  [...noReconocidas.entries()].sort((a, b) => b[1].valor - a[1].valor).forEach(([nom, n]) => filas.push([nom, n.ordenes, n.valor]));
+  $('revisionBody').innerHTML = filas.length
+    ? '<table><thead><tr><th>Ciudad escrita</th><th class="num">Órdenes</th><th class="num">Valor</th></tr></thead><tbody>' +
+      filas.map(f => `<tr><td>${esc(f[0])}</td><td class="num">${f[1]}</td><td class="num">${formatPesos(f[2])}</td></tr>`).join('') + '</tbody></table>'
+    : '<div class="mc-empty">✓ Todas las órdenes tienen una ciudad reconocida.</div>';
+}
+
+function irAlMapa(nombre) {
+  $('hero').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  corrida++;
+  setTimeout(() => seleccionar(nombre), 450);
+}
+
+function dibujarDispersion(lista, mty) {
+  const W = 640, H = 400, L = 56, R = 18, T = 20, B = 46;
+  const svg = $('scatter');
+  if (!lista.length) { svg.innerHTML = ''; return; }
+  const maxO = Math.max(10, ...lista.map(a => a.ordenes)) * 1.25;
+  const minO = 0.8;
+  const maxT = Math.max(...lista.map(a => a.ticket)) * 1.12;
+  const maxV = Math.max(...lista.map(a => a.valor));
+  const X = o => L + (Math.log(o) - Math.log(minO)) / (Math.log(maxO) - Math.log(minO)) * (W - L - R);
+  const Y = t => H - B - t / maxT * (H - T - B);
+  let s = '';
+  const yMty = Y(mty.ticket || 0);
+  if (mty.ticket) s += `<rect x="${L}" y="${T}" width="${X(5) - L}" height="${Math.max(0, yMty - T)}" fill="#C49A3C" opacity=".13" rx="8"/><text x="${L + 10}" y="${Math.max(T + 14, yMty - 10)}" font-size="11.5" font-weight="600" fill="#6B4F35">Alto ticket · pocas órdenes</text>`;
+  for (let i = 0; i <= 4; i++) {
+    const t = maxT / 4 * i, y = Y(t);
+    s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#E7DFD0"/><text x="${L - 8}" y="${y + 4}" font-size="11" fill="#9E9488" text-anchor="end">${fmtM(t).replace(' M', 'M')}</text>`;
+  }
+  [1, 2, 5, 10, 25, 50, 100].filter(o => o <= maxO).forEach(o => {
+    s += `<line x1="${X(o)}" x2="${X(o)}" y1="${T}" y2="${H - B}" stroke="#F0EADD"/><text x="${X(o)}" y="${H - B + 18}" font-size="11" fill="#9E9488" text-anchor="middle">${o}</text>`;
+  });
+  s += `<text x="${(L + W - R) / 2}" y="${H - 6}" font-size="11.5" fill="#6B4F35" text-anchor="middle">Órdenes (escala logarítmica)</text>`;
+  s += `<text transform="translate(14 ${(T + H - B) / 2}) rotate(-90)" font-size="11.5" fill="#6B4F35" text-anchor="middle">Ticket promedio</text>`;
+  if (mty.ticket) s += `<line x1="${L}" x2="${W - R}" y1="${yMty}" y2="${yMty}" stroke="#6B4F35" stroke-dasharray="5 5"/><text x="${W - R}" y="${yMty - 6}" font-size="11" fill="#6B4F35" text-anchor="end">Ticket de Montería</text>`;
+  lista.slice().sort((a, b) => b.valor - a.valor).forEach(a => {
+    const r = 7 + 24 * Math.sqrt(a.valor / maxV), cx = X(a.ordenes), cy = Y(a.ticket), col = colorDe(a);
+    s += `<g class="pt" data-n="${esc(a.lugar.nombre)}"><title>${esc(a.lugar.nombre)}: ${pl(a.ordenes, 'orden', 'órdenes')}, ticket ${fmtM(a.ticket)}, ${fmtM(a.valor)} vendidos</title>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" fill-opacity=".62" stroke="${a.star ? '#27634A' : col}" stroke-width="${a.star ? 2.4 : 1.6}"/>
+      ${(a.star || a.lugar.nombre === MONTERIA || a.valor > maxV * 0.2) ? `<text x="${cx}" y="${cy - r - 5}" font-size="11.5" font-weight="600" fill="#1C1A17" text-anchor="middle">${esc(a.lugar.nombre)}</text>` : ''}</g>`;
+  });
+  svg.innerHTML = s;
+  svg.querySelectorAll('.pt').forEach(g => g.addEventListener('click', () => irAlMapa(g.dataset.n)));
+}
+
+/* ---------- ciclo principal ---------- */
+function refrescar(animar) {
+  DATOS = agregar($('fMes').value);
+  if (seleccion && !DATOS.porLugar.has(seleccion)) { seleccion = null; $('detail').classList.remove('open'); }
+  renderAnalisis();
+  if (!mapaListo) return;
+  crearPins();
+  if (animar) animarAlturas(false, 900);
+  else { DATOS.lista.forEach(a => renderH.set(a.lugar.nombre, alturaDe(a))); pintarColumnas(); posicionarPins(); }
+  if (seleccion) abrirDetalle(DATOS.porLugar.get(seleccion));
+}
+
+async function iniciar() {
+  $('error').style.display = 'none';
+  try {
+    FILAS = await cargarDatos();
+  } catch (e) {
+    console.error(e);
+    $('errorMsg').textContent = 'No se pudieron cargar los datos. Revisa tu conexión a internet e inténtalo de nuevo.';
+    $('error').style.display = 'block';
+    $('curtain').classList.add('off');
+    return;
+  }
+  MESES = [...new Set(FILAS.map(f => f.mes).filter(Boolean))].sort();
+  const sel = $('fMes');
+  sel.length = 1;
+  MESES.forEach(m => sel.add(new Option(nombreMes(m), m)));
+  $('analisis').style.display = '';
+
+  if (!map && !sinWebGL) await iniciarMapa();
+  refrescar(false);
+  if (mapaListo) intro(); else $('curtain').classList.add('off');
+}
+
+/* ---------- eventos ---------- */
+function setMedida(m) {
+  medida = m;
+  $('mValor').classList.toggle('on', m === 'valor');
+  $('mOrdenes').classList.toggle('on', m === 'ordenes');
+  $('mTicket').classList.toggle('on', m === 'ticket');
+  refrescar(true);
+}
+$('mValor').addEventListener('click', () => setMedida('valor'));
+$('mOrdenes').addEventListener('click', () => setMedida('ordenes'));
+$('mTicket').addEventListener('click', () => setMedida('ticket'));
+$('fMes').addEventListener('change', () => refrescar(true));
+$('bIntro').addEventListener('click', () => { if (mapaListo) intro(); });
+$('bTour').addEventListener('click', () => {
+  if (!mapaListo) return;
+  if ($('bTour').classList.contains('on')) { corrida++; $('bTour').classList.remove('on'); } else recorrido();
+});
+$('b3d').addEventListener('click', () => {
+  if (!mapaListo) return;
+  corrida++;
+  const on = $('b3d').classList.toggle('on');
+  map.easeTo({ pitch: on ? 60 : 0, bearing: on ? -18 : 0, duration: 1200 });
+});
+$('reintentar').addEventListener('click', iniciar);
+
+iniciar();
+</script>
+</body>
+</html>
