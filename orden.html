@@ -3254,11 +3254,8 @@ const GOOGLE_REVIEW_URL = 'https://g.page/r/CT4iDiFCO7aHEBM/review';
 function resenaYaPedida(ordenId) {
   try { return localStorage.getItem('casadams_resena_' + ordenId) || ''; } catch (e) { return ''; }
 }
-function resenaNombreMueble(prods) {
-  const d = (Array.isArray(prods) ? prods : []).map(p => String(p.desc || p.descripcion || '').trim()).filter(Boolean);
-  if (d.length === 1 && d[0].length <= 45) return 'tu ' + d[0] + ' ya está';
-  if (d.length > 1) return 'tus muebles de Casa Dams ya están';
-  return 'tu pedido ya está';
+function resenaNombreMueble() {
+  return 'tus muebles ya están';
 }
 async function pedirResenaWA(ordenId, btn) {
   const textoOriginal = btn.textContent;
