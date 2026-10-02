@@ -2042,6 +2042,7 @@ async function verDetalle(id) {
       ${o.pdf_url?`<button onclick="descargarOrdenPNG('${o.pdf_url}','${(o.numero_orden||o.op||'orden')}','${(o.cliente||'cliente').replace(/'/g,'')}') " style="display:inline-flex;align-items:center;gap:8px;background:var(--dark);color:var(--gold);border:1.5px solid var(--gold);padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🖼 Descargar imagen</button>`:''}
       <button onclick="cerrarDetalle();abrirEditar('${o.id}')" style="display:inline-flex;align-items:center;gap:8px;background:var(--brown);color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">✏️ Editar orden</button>
       <button id="btn-subir-sec-${o.id}" onclick="subirASecretaria('${o.id}',this)" style="display:inline-flex;align-items:center;gap:8px;background:${o.registrado_secretaria?'#6B7280':'var(--green)'};color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:${o.registrado_secretaria?'default':'pointer'};" ${o.registrado_secretaria?'disabled title=\"Ya en Secretaria\"':''}>${o.registrado_secretaria?'✅ Ya en Secretaria':'📤 Subir a Secretaria'}</button>
+      <button id="btn-resena-${o.id}" onclick="pedirResenaWA('${o.id}',this)" title="Envía por WhatsApp una invitación para dejar reseña en Google. Úsalo cuando el mueble ya fue entregado." style="display:inline-flex;align-items:center;gap:8px;background:#25D366;color:white;border:none;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">${resenaYaPedida('${o.id}')?'✅ Reseña pedida (reenviar)':'⭐ Pedir reseña'}</button>
     </div>
     <div class="detalle-grid">
       <div class="detalle-field"><span class="det-label">Cliente</span><span class="det-val">${o.cliente||'—'}</span></div>
@@ -3240,6 +3241,74 @@ async function reenviarWADirecto(ordenId, btn) {
   } catch(e) {
     console.error('Error al reenviar WA:', e);
     mostrarToast('❌ Error al enviar — verifica que WAHA esté activo');
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+}
+
+// ========================
+// PEDIR RESEÑA DE GOOGLE (manual, tras confirmar la entrega)
+// ========================
+const GOOGLE_REVIEW_URL = 'https://g.page/r/CT4iDiFCO7aHEBM/review';
+
+function resenaYaPedida(ordenId) {
+  try { return localStorage.getItem('casadams_resena_' + ordenId) || ''; } catch (e) { return ''; }
+}
+function resenaNombreMueble(prods) {
+  const d = (Array.isArray(prods) ? prods : []).map(p => String(p.desc || p.descripcion || '').trim()).filter(Boolean);
+  return (d.length === 1 && d[0].length <= 45) ? 'tu ' + d[0] : (d.length > 1 ? 'tus muebles' : 'tu pedido');
+}
+async function pedirResenaWA(ordenId, btn) {
+  const textoOriginal = btn.textContent;
+  try {
+    btn.disabled = true;
+    btn.textContent = '⏳ Preparando...';
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${ordenId}&select=cliente,telefono,productos`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) throw new Error('Orden no encontrada');
+    const o = data[0];
+
+    const telefono = (o.telefono || '').replace(/\D/g, '');
+    if (!telefono) {
+      mostrarToast('⚠️ Esta orden no tiene teléfono guardado');
+      btn.disabled = false; btn.textContent = textoOriginal;
+      return;
+    }
+
+    const nom1 = String(o.cliente || '').trim().split(/\s+/)[0] || 'cliente';
+    const primerNombre = nom1.charAt(0).toUpperCase() + nom1.slice(1).toLowerCase();
+    const previa = resenaYaPedida(ordenId);
+    const aviso = previa
+      ? `Ya se pidió reseña a ${o.cliente || 'este cliente'} (${previa}) desde este equipo.
+
+¿Enviar otra vez?`
+      : `¿Ya se entregó el mueble?
+
+Se enviará por WhatsApp la invitación para dejar una reseña en Google a ${o.cliente || 'este cliente'} (${o.telefono}).`;
+    if (!confirm(aviso)) { btn.disabled = false; btn.textContent = textoOriginal; return; }
+
+    btn.textContent = '⏳ Enviando...';
+    const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
+    const mensaje = `Hola ${primerNombre}, ¿cómo quedó ${resenaNombreMueble(o.productos)} en casa? En Casa Dams nos alegra mucho que sea parte de tu hogar. Si estás contento con tu compra, ¿nos regalas 30 segundos para dejarnos tu opinión? Nos ayuda muchísimo a que más familias nos encuentren: ${GOOGLE_REVIEW_URL}
+
+¡Gracias por confiar en nosotros!`;
+
+    const resWa = await fetch('/api/waha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: '/api/sendText', payload: { session: WAHA_SESSION, chatId, text: mensaje } })
+    });
+    if (!resWa.ok) throw new Error('WAHA respondió con error ' + resWa.status);
+
+    try { localStorage.setItem('casadams_resena_' + ordenId, new Date().toLocaleDateString('es-CO')); } catch (e) {}
+    mostrarToast('✅ Solicitud de reseña enviada');
+    btn.textContent = '✅ Reseña pedida (reenviar)';
+    btn.disabled = false;
+  } catch (e) {
+    console.error('Error al pedir reseña:', e);
+    mostrarToast('❌ No se pudo enviar — verifica que WAHA esté activo');
     btn.disabled = false;
     btn.textContent = textoOriginal;
   }
