@@ -3256,7 +3256,9 @@ function resenaYaPedida(ordenId) {
 }
 function resenaNombreMueble(prods) {
   const d = (Array.isArray(prods) ? prods : []).map(p => String(p.desc || p.descripcion || '').trim()).filter(Boolean);
-  return (d.length === 1 && d[0].length <= 45) ? 'tu ' + d[0] : (d.length > 1 ? 'tus muebles' : 'tu pedido');
+  if (d.length === 1 && d[0].length <= 45) return 'tu ' + d[0] + ' ya está';
+  if (d.length > 1) return 'tus muebles de Casa Dams ya están';
+  return 'tu pedido ya está';
 }
 async function pedirResenaWA(ordenId, btn) {
   const textoOriginal = btn.textContent;
@@ -3291,9 +3293,15 @@ Se enviará por WhatsApp la invitación para dejar una reseña en Google a ${o.c
 
     btn.textContent = '⏳ Enviando...';
     const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
-    const mensaje = `Hola ${primerNombre}, ¿cómo quedó ${resenaNombreMueble(o.productos)} en casa? En Casa Dams nos alegra mucho que sea parte de tu hogar. Si estás contento con tu compra, ¿nos regalas 30 segundos para dejarnos tu opinión? Nos ayuda muchísimo a que más familias nos encuentren: ${GOOGLE_REVIEW_URL}
-
-¡Gracias por confiar en nosotros!`;
+    const mensaje = [
+      `Hola ${primerNombre} 😊`,
+      `Sabemos que ${resenaNombreMueble(o.productos)} en casa y nos encanta.`,
+      '',
+      'Si nos ayudas con una reseña de 5 estrellas, nos haces el día 🙏',
+      `👉 ${GOOGLE_REVIEW_URL}`,
+      '',
+      'Con gusto, Casa Dams 🏠'
+    ].join('\n');
 
     const resWa = await fetch('/api/waha', {
       method: 'POST',
