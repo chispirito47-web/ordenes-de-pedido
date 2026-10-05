@@ -6,6 +6,8 @@ let productos = []; // [{id, qty, desc, unitario, photo: dataUrl}]
 let layout = 'lista';
 let formasPago = new Set();
 let photoTargetId = null; // ID del producto al que asignar foto
+let editandoCotId = null;   // id de la cotización guardada que se está editando (null = cotización nueva)
+let numeroNuevaCot = '';    // número que le tocaba a la próxima cotización nueva (se restaura al terminar de editar)
 
 /* ---------- INIT ---------- */
 window.addEventListener('DOMContentLoaded', async () => {
@@ -285,10 +287,67 @@ function formatearPrecioInput(input, pid) {
 }
 
 /* ---------- TOTALES ---------- */
+/* Descuento opcional y manual: nunca se aplica solo. El descuento en % se redondea
+   a múltiplos de $5.000 para que el precio final quede en múltiplos de $5.000. */
+function leerDescuento() {
+  const subtotal = productos.reduce((acc, p) => acc + subtotalProducto(p), 0);
+  const base = { activo: false, subtotal: subtotal, monto: 0, total: subtotal, etiqueta: '', tipo: '', pct: 0 };
+  const chk = document.getElementById('descActivo');
+  if (!chk || !chk.checked || subtotal <= 0) return base;
+  const tipo = document.getElementById('descTipo').value;
+  const raw = document.getElementById('descValor').value;
+  let monto = 0, etiqueta = 'Descuento', pct = 0;
+  if (tipo === 'pct') {
+    pct = Math.min(100, Math.max(0, parseFloat(String(raw).replace(',', '.')) || 0));
+    monto = Math.round(subtotal * pct / 100 / 5000) * 5000;
+    etiqueta = 'Descuento ' + String(pct).replace('.', ',') + '%';
+  } else {
+    monto = parseMonto(raw);
+  }
+  monto = Math.min(subtotal, Math.max(0, monto));
+  if (monto <= 0) return base;
+  return { activo: true, subtotal: subtotal, monto: monto, total: subtotal - monto, etiqueta: etiqueta, tipo: tipo, pct: pct };
+}
+
+function toggleDescuento() {
+  const on = document.getElementById('descActivo').checked;
+  document.getElementById('descCampos').style.display = on ? '' : 'none';
+  if (!on) document.getElementById('descValor').value = '';
+  else document.getElementById('descValor').focus();
+  calcularTotales();
+}
+
 function calcularTotales() {
-  const total = productos.reduce((acc, p) => acc + subtotalProducto(p), 0);
-  document.getElementById('totalGeneral').textContent = formatPesos(total);
-  document.getElementById('sonLetras').textContent = total > 0 ? totalEnLetras(total) : '—';
+  const d = leerDescuento();
+  document.getElementById('totalGeneral').textContent = formatPesos(d.total);
+  document.getElementById('sonLetras').textContent = d.total > 0 ? totalEnLetras(d.total) : '—';
+  document.getElementById('rowSubtotal').style.display = d.activo ? '' : 'none';
+  document.getElementById('rowDescuento').style.display = d.activo ? '' : 'none';
+  document.getElementById('subtotalGeneral').textContent = formatPesos(d.subtotal);
+  document.getElementById('descLabel').textContent = d.etiqueta || 'Descuento';
+  document.getElementById('descMonto').textContent = '- ' + formatPesos(d.monto);
+  document.getElementById('totalLabel').textContent = d.activo ? 'Total con descuento' : 'Total Cotización';
+  const aviso = document.getElementById('descAviso');
+  if (aviso) {
+    if (!d.activo) aviso.textContent = '';
+    else if (d.tipo === 'pct') aviso.textContent = 'Equivale a ' + formatPesos(d.monto) + ' (redondeado a múltiplo de $5.000).';
+    else aviso.textContent = d.monto % 5000 !== 0 ? 'Ojo: el descuento no es múltiplo de $5.000.' : '';
+  }
+}
+
+/* Líneas de producto para guardar: si hay descuento se añade como una línea más,
+   así el historial y el reenvío por WhatsApp lo muestran sin cambiar la base de datos. */
+function productosParaGuardar() {
+  const lineas = productos.filter(p => p.desc || p.qty).map(p => ({ qty: p.qty, desc: p.desc, unitario: p.unitario, sub: formatPesos(subtotalProducto(p)) }));
+  const d = leerDescuento();
+  if (d.activo) lineas.push({ qty: 1, desc: d.etiqueta, unitario: -d.monto, sub: '- ' + formatPesos(d.monto), esDescuento: true });
+  // Datos que no tienen columna propia: se guardan aquí para poder editar la cotización después
+  lineas.push({ esMeta: true,
+    cc: document.getElementById('clienteCC').value, direccion: document.getElementById('clienteDireccion').value,
+    ciudad: document.getElementById('clienteCiudad').value, correo: document.getElementById('clienteCorreo').value,
+    formasPago: Array.from(formasPago), mensaje: document.getElementById('mensajeCliente').value,
+    validezDias: document.getElementById('validezDias').value });
+  return lineas;
 }
 
 /* ---------- DATOS / GETTERS ---------- */
@@ -307,6 +366,7 @@ function getDatos() {
     tel: document.getElementById('clienteTel').value,
     correo: document.getElementById('clienteCorreo').value,
     total: document.getElementById('totalGeneral').textContent,
+    descuento: leerDescuento(),
     son: document.getElementById('sonLetras').textContent,
     formasPago: Array.from(formasPago),
     mensaje: document.getElementById('mensajeCliente').value
@@ -542,7 +602,31 @@ async function generarPDFBlob() {
 
   // ====== TOTAL ======
   // Nueva página si está al borde
-  if (y > H - 70) { doc.addPage(); drawHeader(); y = 48; }
+  const dsc = d.descuento && d.descuento.activo ? d.descuento : null;
+  if (y > H - (dsc ? 88 : 70)) { doc.addPage(); drawHeader(); y = 48; }
+
+  // Precio normal (tachado) y descuento, solo si se aplicó uno
+  if (dsc) {
+    const dx = margin + contentW * 0.62, dw = contentW * 0.38;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(120, 110, 100);
+    doc.text('PRECIO NORMAL', dx + 4, y + 4);
+    doc.setFontSize(10);
+    const normalTxt = formatPesos(dsc.subtotal);
+    doc.text(normalTxt, dx + dw - 4, y + 4, { align: 'right' });
+    const normalW = doc.getTextWidth(normalTxt);
+    doc.setDrawColor(120, 110, 100);
+    doc.setLineWidth(0.3);
+    doc.line(dx + dw - 4 - normalW, y + 3, dx + dw - 4, y + 3);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(39, 99, 74);
+    doc.text(dsc.etiqueta.toUpperCase(), dx + 4, y + 10);
+    doc.setFontSize(10);
+    doc.text('- ' + formatPesos(dsc.monto), dx + dw - 4, y + 10, { align: 'right' });
+    y += 14;
+  }
 
   // Son
   doc.setFillColor(245, 240, 232);
@@ -567,7 +651,7 @@ async function generarPDFBlob() {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(196, 154, 60);
-  doc.text('TOTAL COTIZACIÓN', totX + 4, y + 5.5);
+  doc.text(dsc ? 'TOTAL CON DESCUENTO' : 'TOTAL COTIZACIÓN', totX + 4, y + 5.5);
   doc.setFontSize(14);
   doc.setTextColor(232, 201, 106);
   doc.text(d.total, totX + totW - 4, y + 11, { align: 'right' });
@@ -655,20 +739,25 @@ async function generarPDFBlob() {
 
 async function guardarCotizacionEnSupabase(d, pdfLink, enviadoWA) {
   try {
-    await fetch(`${_SUPA_URL}/rest/v1/cotizaciones`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json','apikey':_SUPA_KEY,'Authorization':'Bearer '+_SUPA_KEY,'Prefer':'return=minimal' },
-      body: JSON.stringify({
-        numero_cotizacion: d.numero,
-        cliente: d.nombre||'', telefono: d.tel||'',
-        fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
-        fecha_vencimiento: d.fechaVencimiento||null,
-        tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
-        productos: productos.filter(p=>p.desc||p.qty).map(p=>({qty:p.qty,desc:p.desc,unitario:p.unitario,sub:formatPesos(subtotalProducto(p))})),
-        valor_total: productos.reduce((acc,p)=>acc+subtotalProducto(p),0),
-        pdf_url: pdfLink||'', enviado_whatsapp: enviadoWA
-      })
-    });
+    const datos = {
+      numero_cotizacion: d.numero,
+      cliente: d.nombre||'', telefono: d.tel||'',
+      fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
+      fecha_vencimiento: d.fechaVencimiento||null,
+      tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
+      productos: productosParaGuardar(),
+      valor_total: leerDescuento().total,
+      pdf_url: pdfLink||''
+    };
+    const headers = { 'Content-Type':'application/json','apikey':_SUPA_KEY,'Authorization':'Bearer '+_SUPA_KEY,'Prefer':'return=minimal' };
+    if (editandoCotId) {
+      // Edición: se actualiza la misma cotización. Solo se marca como enviada si se acaba de enviar.
+      if (enviadoWA) datos.enviado_whatsapp = true;
+      await fetch(`${_SUPA_URL}/rest/v1/cotizaciones?id=eq.${encodeURIComponent(editandoCotId)}`, { method: 'PATCH', headers, body: JSON.stringify(datos) });
+    } else {
+      datos.enviado_whatsapp = enviadoWA;
+      await fetch(`${_SUPA_URL}/rest/v1/cotizaciones`, { method: 'POST', headers, body: JSON.stringify(datos) });
+    }
   } catch(e) { console.warn('Supabase error al guardar cotización:', e); }
 }
 
@@ -683,8 +772,10 @@ async function descargarPDF() {
     mostrarToast('⏳ Guardando...');
     const pdfLink = await subirPDFaSupabase(pdfBlob, fileName, 'ordenes');
     doc.save(`Cotizacion_CasaDams_${d.numero}.pdf`);
+    const estabaEditando = !!editandoCotId;
     await guardarCotizacionEnSupabase(d, pdfLink, false);
-    mostrarToast('✓ PDF descargado');
+    mostrarToast(estabaEditando ? '✓ Cambios guardados y PDF descargado' : '✓ PDF descargado');
+    if (estabaEditando) { await terminarEdicion(); return; }
     // Avanzar contador
     const num = parseInt(d.numero.replace(/\D/g, ''));
     if (!isNaN(num)) setContador('cotizacion_num', num);
@@ -748,13 +839,18 @@ async function enviarWA() {
       .map(p => `• ${p.qty || 1}x ${p.desc} — ${formatPesos(subtotalProducto(p))}`)
       .join('\n');
 
+    const dsc = d.descuento && d.descuento.activo ? d.descuento : null;
+    const lineaTotal = dsc
+      ? `💰 *Precio normal:* ~${formatPesos(dsc.subtotal)}~\n🎁 *${dsc.etiqueta}:* -${formatPesos(dsc.monto)}\n✅ *Total con descuento:* ${d.total}`
+      : `💰 *Total:* ${d.total}`;
+
     const mensaje = `🛋️ *CASA DAMS — Cotización ${d.numero}*
 
 Hola ${d.nombre || 'cliente'}, le compartimos la cotización solicitada:
 
 ${productosTxt}
 
-💰 *Total:* ${d.total}
+${lineaTotal}
 📅 *Válida hasta:* ${formatDate(d.fechaVencimiento)}
 ${d.tiempoEntrega ? `📦 *Entrega:* ${d.tiempoEntrega}\n` : ''}
 ${pdfLink ? `📄 ${pdfLink}` : ''}
@@ -764,7 +860,9 @@ Quedamos atentos a su confirmación.
 
     const res = await enviarMensajeWA(chatId, mensaje);
     if (res.ok) {
+      const estabaEditando = !!editandoCotId;
       await guardarCotizacionEnSupabase(d, pdfLink, true);
+      if (estabaEditando) await terminarEdicion();
       mostrarToast(pdfLink ? '✓ Cotización enviada con PDF' : '✓ Mensaje enviado');
     } else {
       throw new Error('WAHA error');
@@ -779,6 +877,7 @@ Quedamos atentos a su confirmación.
    NUEVA / RESET
    ========================================================= */
 async function nuevaCotizacion() {
+  if (editandoCotId) { cancelarEdicion(); return; }
   if (!confirm('¿Crear nueva cotización? Se perderán los datos actuales.')) return;
 
   const currentNum = parseInt(document.getElementById('numeroCotizacion').value.replace(/\D/g, '')) || 1;
@@ -806,6 +905,10 @@ async function nuevaCotizacion() {
   document.getElementById('clienteTel').value = '';
   document.getElementById('clienteCorreo').value = '';
   document.getElementById('mensajeCliente').value = '';
+  document.getElementById('descActivo').checked = false;
+  document.getElementById('descCampos').style.display = 'none';
+  document.getElementById('descValor').value = '';
+  document.getElementById('descTipo').value = 'pct';
 
   productos = [];
   agregarProducto(); agregarProducto();
@@ -815,6 +918,121 @@ async function nuevaCotizacion() {
   mostrarToast('✓ Nueva cotización lista');
 }
 
+
+/* =========================================================
+   EDITAR UNA COTIZACIÓN GUARDADA
+   ========================================================= */
+function _setVal(id, v) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const val = v == null ? '' : String(v);
+  // En listas desplegables: si el valor guardado ya no está entre las opciones, se agrega para no perderlo
+  if (el.tagName === 'SELECT' && val && ![...el.options].some(o => o.value === val)) el.add(new Option(val, val));
+  el.value = val;
+}
+
+function editarCotizacion(id) {
+  const c = _cotizaciones.find(x => String(x.id) === String(id));
+  if (!c) return;
+  if (editandoCotId === null) numeroNuevaCot = document.getElementById('numeroCotizacion').value;   // para restaurarlo luego
+  editandoCotId = c.id;
+
+  const lineas = Array.isArray(c.productos) ? c.productos : [];
+  const meta = lineas.find(p => p.esMeta) || {};
+  const lineaDesc = lineas.find(p => p.esDescuento);
+
+  _setVal('numeroCotizacion', c.numero_cotizacion || '');
+  document.getElementById('displayNumero').textContent = c.numero_cotizacion || '—';
+  _setVal('fechaCotizacion', c.fecha_cotizacion || today());
+  let validez = meta.validezDias;
+  if (!validez && c.fecha_cotizacion && c.fecha_vencimiento) {
+    validez = String(Math.round((Date.parse(c.fecha_vencimiento + 'T12:00:00Z') - Date.parse(c.fecha_cotizacion + 'T12:00:00Z')) / 86400000));
+  }
+  _setVal('validezDias', validez || '5');
+  _setVal('vendedor', c.vendedor);
+  _setVal('tiempoEntrega', c.tiempo_entrega);
+  _setVal('clienteNombre', c.cliente);
+  _setVal('clienteTel', c.telefono);
+  _setVal('clienteDireccion', meta.direccion);
+  _setVal('clienteCiudad', meta.ciudad);
+  _setVal('clienteCC', meta.cc);
+  _setVal('clienteCorreo', meta.correo);
+  _setVal('mensajeCliente', meta.mensaje);
+
+  if (Array.isArray(meta.formasPago)) {
+    formasPago = new Set(meta.formasPago);
+    document.querySelectorAll('#chipsPago .chip').forEach(ch => ch.classList.toggle('active', formasPago.has(ch.dataset.value)));
+  }
+
+  productos = lineas.filter(p => !p.esMeta && !p.esDescuento)
+    .map((p, i) => ({ id: Date.now() + '' + i, qty: p.qty, desc: p.desc, unitario: p.unitario, photo: null }));
+  if (productos.length === 0) productos.push({ id: Date.now() + 'x', qty: '', desc: '', unitario: '', photo: null });
+
+  // descuento guardado → vuelve a la casilla
+  const chk = document.getElementById('descActivo');
+  chk.checked = !!lineaDesc;
+  document.getElementById('descCampos').style.display = lineaDesc ? '' : 'none';
+  if (lineaDesc) {
+    const m = /([\d.,]+)\s*%/.exec(lineaDesc.desc || '');
+    if (m) { _setVal('descTipo', 'pct'); _setVal('descValor', m[1]); }
+    else { _setVal('descTipo', 'monto'); _setVal('descValor', formatPesos(Math.abs(Number(lineaDesc.unitario) || 0))); }
+  } else { _setVal('descValor', ''); _setVal('descTipo', 'pct'); }
+
+  renderProductos();
+  calcularTotales();
+  actualizarVencimiento();
+
+  const sinExtras = !lineas.some(p => p.esMeta);
+  document.getElementById('beTitulo').textContent = 'Editando ' + (c.numero_cotizacion || 'cotización');
+  document.getElementById('beNota').textContent =
+    'Los cambios reemplazan la cotización guardada (mismo número). Las fotos de los muebles no se guardan: vuelve a adjuntarlas si las necesitas.' +
+    (sinExtras ? ' Esta cotización es anterior a la función de editar: completa cédula, dirección, ciudad, correo y formas de pago si hacen falta.' : '');
+  const a = document.getElementById('bePdfAnterior');
+  if (c.pdf_url) { a.href = c.pdf_url; a.style.display = ''; } else { a.style.display = 'none'; }
+  document.getElementById('bannerEdicion').style.display = 'flex';
+  const eb = document.getElementById('estadoBadge'); if (eb) eb.textContent = 'Editando';
+
+  cerrarDetCotSiAbierto();
+  cambiarTabCot('nueva');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cerrarDetCotSiAbierto() {
+  const o = document.getElementById('detalleCotOverlay');
+  if (o) o.style.display = 'none';
+}
+
+function restaurarFormularioNuevo() {
+  _setVal('numeroCotizacion', numeroNuevaCot);
+  document.getElementById('displayNumero').textContent = numeroNuevaCot || '—';
+  _setVal('fechaCotizacion', today());
+  _setVal('validezDias', '5');
+  ['vendedor', 'tiempoEntrega', 'clienteNombre', 'clienteDireccion', 'clienteCiudad', 'clienteCC', 'clienteTel', 'clienteCorreo', 'mensajeCliente'].forEach(i => _setVal(i, ''));
+  document.getElementById('descActivo').checked = false;
+  document.getElementById('descCampos').style.display = 'none';
+  _setVal('descValor', ''); _setVal('descTipo', 'pct');
+  formasPago = new Set(['Efectivo', 'Transferencia', '50% anticipo']);
+  document.querySelectorAll('#chipsPago .chip').forEach(ch => ch.classList.toggle('active', formasPago.has(ch.dataset.value)));
+  productos = [];
+  agregarProducto(); agregarProducto();
+  calcularTotales();
+  actualizarVencimiento();
+  const eb = document.getElementById('estadoBadge'); if (eb) eb.textContent = 'Borrador';
+  document.getElementById('bannerEdicion').style.display = 'none';
+}
+
+function cancelarEdicion() {
+  if (!confirm('¿Salir de la edición? Se perderán los cambios que no hayas guardado.')) return;
+  editandoCotId = null;
+  restaurarFormularioNuevo();
+  mostrarToast('Edición cancelada');
+}
+
+async function terminarEdicion() {
+  editandoCotId = null;
+  restaurarFormularioNuevo();
+  cambiarTabCot('historial');
+}
 
 /* =========================================================
    PESTAÑAS + HISTORIAL
@@ -873,6 +1091,7 @@ function renderHistCot(lista) {
         <div style="font-size:12px;color:#9E9488">${fH(c.fecha_cotizacion)}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
+          <button onclick="event.stopPropagation();editarCotizacion('${c.id}')" style="background:#fff;color:#6B4F35;border:1.5px solid #C49A3C;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">✏️ Editar</button>
           ${!c.enviado_whatsapp?`<button id="btn-reenv-cot-${c.id}" onclick="event.stopPropagation();reenviarWACot('${c.id}',this)" style="background:#25D366;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔁 Reenviar WA</button>`:''}
         </div>
       </div>
@@ -913,7 +1132,7 @@ async function reenviarWACot(cotId, btn) {
     const chatId = (telefono.startsWith('57') ? telefono : '57' + telefono) + '@c.us';
     const productosTxt = (c.productos || [])
       .filter(p => p.desc || p.qty)
-      .map(p => `• ${p.qty || 1}x ${p.desc} — ${p.sub || ''}`)
+      .map(p => p.esDescuento ? `🎁 ${p.desc} — ${p.sub || ''}` : `• ${p.qty || 1}x ${p.desc} — ${p.sub || ''}`)
       .join('\n');
 
     const mensaje = `🛋️ *CASA DAMS — Cotización ${c.numero_cotizacion || '—'}*\n\nHola ${c.cliente || 'cliente'}, le compartimos la cotización solicitada:\n\n${productosTxt}\n\n💰 *Total:* $${Number(c.valor_total||0).toLocaleString('es-CO')}\n${c.fecha_vencimiento ? `📅 *Válida hasta:* ${new Date(c.fecha_vencimiento+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}\n` : ''}${c.pdf_url ? `📄 ${c.pdf_url}` : ''}\n\nQuedamos atentos a su confirmación.\n📍 Cra. 4 N° 49-71, Montería · 📞 321 540 0839`;
@@ -956,9 +1175,9 @@ function verDetCot(id) {
   t.textContent = `Cotización ${c.numero_cotizacion||'—'}`;
   let ph = '';
   if (c.productos&&c.productos.length>0) {
-    ph = `<div style="background:#F5F0E8;border-radius:10px;padding:14px;margin-bottom:16px">${c.productos.map(p=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #D4C9B8;font-size:14px"><span>${p.qty||1}x ${p.desc||'—'}</span><span style="font-weight:600;color:#6B4F35">${p.sub||'—'}</span></div>`).join('')}</div>`;
+    ph = `<div style="background:#F5F0E8;border-radius:10px;padding:14px;margin-bottom:16px">${c.productos.filter(p=>!p.esMeta).map(p=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #D4C9B8;font-size:14px"><span>${p.esDescuento ? '' : (p.qty||1)+'x '}${p.desc||'—'}</span><span style="font-weight:600;color:#6B4F35">${p.sub||'—'}</span></div>`).join('')}</div>`;
   }
-  cn.innerHTML = `${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#C49A3C;color:#1C1A17;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:16px">📄 Ver PDF</a>`:''}
+  cn.innerHTML = `${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" style="display:inline-flex;align-items:center;gap:8px;background:#C49A3C;color:#1C1A17;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin:0 8px 16px 0">📄 Ver PDF</a>`:''}<button onclick="editarCotizacion('${c.id}')" style="display:inline-flex;align-items:center;gap:8px;background:#fff;color:#6B4F35;border:1.5px solid #C49A3C;padding:9px 18px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:16px">✏️ Editar cotización</button>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Cliente</div><div style="font-size:15px">${c.cliente||'—'}</div></div>
       <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Teléfono</div><div style="font-size:15px">${c.telefono||'—'}</div></div>

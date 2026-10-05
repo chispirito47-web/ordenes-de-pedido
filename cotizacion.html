@@ -401,6 +401,24 @@
     .productos-lista .producto-row .subtotal-display { grid-area: subtotal; }
     .productos-lista .producto-row .btn-delete-row { grid-area: delete; justify-self: end; }
   }
+  /* ---- Descuento opcional ---- */
+  .desc-panel { align-self: flex-end; min-width: 320px; max-width: 100%; background: var(--cream); border: 1.5px dashed var(--border); border-radius: 12px; padding: 12px 14px; }
+  .desc-toggle { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--brown); cursor: pointer; margin: 0; letter-spacing: 0; text-transform: none; }
+  .desc-toggle input[type=checkbox] { -webkit-appearance: checkbox; appearance: auto; flex: 0 0 18px; width: 18px; height: 18px; padding: 0; margin: 0; border: initial; background: initial; accent-color: var(--brown); }
+  .desc-campos { display: flex; gap: 8px; margin-top: 10px; }
+  .desc-campos select { flex: 0 0 150px; }
+  .desc-campos input { flex: 1; min-width: 0; text-align: right; }
+  .desc-aviso { font-size: 12px; color: var(--warm-gray); margin-top: 8px; line-height: 1.45; }
+  .desc-aviso:empty { display: none; }
+  .total-value.tachado { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--warm-gray); font-weight: 500; }
+  .total-value.desc-val { color: var(--green); }
+  /* ---- Aviso de edición ---- */
+  .banner-edicion { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: #FFF3DC; border: 1.5px solid var(--gold); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
+  .be-texto { font-size: 13.5px; color: var(--dark); line-height: 1.5; flex: 1; min-width: 240px; }
+  .be-texto b { display: block; font-family: 'Playfair Display', serif; font-size: 16px; color: var(--brown); }
+  .be-acciones { display: flex; align-items: center; gap: 12px; }
+  .be-acciones a { font-size: 13px; font-weight: 600; color: var(--brown); text-decoration: underline; text-underline-offset: 3px; }
+  .be-acciones button { background: var(--dark); color: var(--gold); border: none; border-radius: 999px; padding: 8px 16px; font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -432,6 +450,18 @@
 
 <div id="tabCotNueva">
 <div class="container">
+
+  <!-- AVISO DE EDICIÓN (solo aparece al editar una cotización guardada) -->
+  <div class="banner-edicion" id="bannerEdicion" style="display:none">
+    <div class="be-texto">
+      <b id="beTitulo">Editando cotización</b>
+      <span id="beNota"></span>
+    </div>
+    <div class="be-acciones">
+      <a id="bePdfAnterior" href="#" target="_blank" rel="noopener" style="display:none">Ver PDF anterior</a>
+      <button type="button" onclick="cancelarEdicion()">Cancelar edición</button>
+    </div>
+  </div>
 
   <!-- INFO COTIZACIÓN -->
   <div class="card">
@@ -545,8 +575,28 @@
 
     <!-- TOTAL -->
     <div class="totales">
+      <!-- DESCUENTO (opcional, manual) -->
+      <div class="desc-panel">
+        <label class="desc-toggle"><input type="checkbox" id="descActivo" onchange="toggleDescuento()"> Aplicar descuento a esta cotización</label>
+        <div class="desc-campos" id="descCampos" style="display:none">
+          <select id="descTipo" onchange="calcularTotales()">
+            <option value="pct">Porcentaje</option>
+            <option value="monto">Valor en $</option>
+          </select>
+          <input type="text" id="descValor" inputmode="decimal" autocomplete="off" placeholder="Ej. 10" oninput="calcularTotales()">
+        </div>
+        <div class="desc-aviso" id="descAviso"></div>
+      </div>
+      <div class="total-row" id="rowSubtotal" style="display:none">
+        <span class="total-label">Precio normal</span>
+        <span class="total-value tachado" id="subtotalGeneral">$0</span>
+      </div>
+      <div class="total-row" id="rowDescuento" style="display:none">
+        <span class="total-label" id="descLabel">Descuento</span>
+        <span class="total-value desc-val" id="descMonto">$0</span>
+      </div>
       <div class="total-row grand">
-        <span class="total-label">Total Cotización</span>
+        <span class="total-label" id="totalLabel">Total Cotización</span>
         <span class="total-value" id="totalGeneral">$0</span>
       </div>
     </div>
