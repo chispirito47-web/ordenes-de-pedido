@@ -171,7 +171,6 @@ function nextContador(key, fallback = 1) {
 
 /* ---------- WHATSAPP / SUPABASE ---------- */
 const WAHA_URL  = '/api/waha';
-const WAHA_KEY  = '7a498bf58d914dfba845841aca339131';
 const WAHA_SESSION = 'default';
 const SUPA_URL = 'https://pqpzhmopnigxyacwdjbc.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHpobW9wbmlneHlhY3dkamJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTc1NzUsImV4cCI6MjA5MjIzMzU3NX0.HDy-WoX5ldwnTsfXHecnJwJ72v2jgaPrXwCSjBrmsys';
