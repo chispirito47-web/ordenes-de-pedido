@@ -3406,17 +3406,20 @@ function _cotSet(id, v) {
 
 async function cargarDesdeCotizacion() {
   const raw = (document.getElementById('cotRef').value || '').trim();
-  if (!raw) { mostrarToast('⚠ Escribe un N° de cotización'); return; }
+  if (!raw) { mostrarToast('⚠ Escribe un N° de cotización o el nombre del cliente'); return; }
+  // ¿Es un número (12, COT-0012) o un nombre?
+  const esNumero = raw.replace(/\D/g, '') !== '' && raw.replace(/[\d\s\-\/COTcot]/g, '') === '';
   const num = normalizarNumCot(raw);
   const btn = document.getElementById('btnCargarCot');
   btn.disabled = true;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?numero_cotizacion=eq.${encodeURIComponent(num)}&select=id,numero_cotizacion,cliente,fecha_cotizacion,valor_total&order=created_at.desc&limit=10`, { headers: _cotHeaders() });
+    const filtro = esNumero ? `numero_cotizacion=eq.${encodeURIComponent(num)}` : `cliente=ilike.*${encodeURIComponent(raw)}*`;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?${filtro}&select=id,numero_cotizacion,cliente,fecha_cotizacion,valor_total&order=created_at.desc&limit=10`, { headers: _cotHeaders() });
     const data = await res.json();
-    if (!Array.isArray(data) || data.length === 0) { mostrarToast('⚠ No se encontró la cotización ' + num); return; }
+    if (!Array.isArray(data) || data.length === 0) { mostrarToast(esNumero ? '⚠ No se encontró la cotización ' + num : '⚠ No hay cotizaciones de "' + raw + '"'); return; }
     if (data.length === 1) { await cargarCotizacionPorId(data[0].id); return; }
-    // Varias cotizaciones comparten el mismo número: se elige cuál cargar
-    _pintarSugerenciasCot(data, 'Hay varias cotizaciones con el número ' + num + '. Elige cuál cargar:');
+    // Varias coinciden (mismo número o mismo nombre): se elige cuál cargar
+    _pintarSugerenciasCot(data, esNumero ? 'Hay varias cotizaciones con el número ' + num + '. Elige cuál cargar:' : 'Cotizaciones de "' + raw + '". Elige cuál cargar:');
   } catch (e) {
     console.error(e);
     mostrarToast('✗ Error al cargar — revisa la conexión');
