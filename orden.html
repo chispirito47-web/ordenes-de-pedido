@@ -735,6 +735,24 @@
     outline: none;
     border-color: var(--gold);
   }
+  /* ---- Cargar desde cotización ---- */
+  .cargar-cot { background: var(--cream); border: 1.5px dashed var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 18px; }
+  .cargar-cot > label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--warm-gray); margin-bottom: 8px; }
+  .cargar-cot-hint { font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .cargar-cot-row { display: flex; gap: 10px; }
+  .cargar-cot-row input { flex: 1; min-width: 0; }
+  .cargar-cot-row button { background: var(--dark); color: var(--gold); border: none; border-radius: 10px; padding: 0 18px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .cargar-cot-row button:disabled { opacity: .6; cursor: wait; }
+  .cot-sugerencias { margin-top: 8px; background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 6px 20px rgba(28,26,23,.10); }
+  .cot-sug-item { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 14px; cursor: pointer; border-top: 1px solid var(--cream); font-size: 13px; }
+  .cot-sug-item:first-child { border-top: 0; }
+  .cot-sug-item:hover { background: var(--cream); }
+  .cot-sug-titulo { padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--brown); background: var(--cream); }
+  .cot-sug-num { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--brown); }
+  .cot-sug-meta { color: var(--warm-gray); font-size: 12px; }
+  .cot-aviso { margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.55; background: #E3F1EA; color: #065F46; border: 1px solid rgba(39,99,74,.3); }
+  .cot-aviso.atencion { background: #FFF3DC; color: #7A5200; border-color: var(--gold); }
+  .cot-aviso div + div { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -770,6 +788,17 @@
   <!-- INFO GENERAL -->
   <div class="card">
     <div class="card-title">Información de la Orden</div>
+
+    <!-- CARGAR DESDE COTIZACIÓN (opcional) -->
+    <div class="cargar-cot">
+      <label>Cargar desde cotización <span class="cargar-cot-hint">(opcional — escribe el N° o el nombre del cliente)</span></label>
+      <div class="cargar-cot-row">
+        <input type="text" id="cotRef" placeholder="Ej. 12, COT-0012 o nombre del cliente" autocomplete="off" oninput="buscarCotizacionesSugerencias()" onkeydown="if(event.key==='Enter'){event.preventDefault();cargarDesdeCotizacion();}">
+        <button type="button" id="btnCargarCot" onclick="cargarDesdeCotizacion()">⬇ Cargar datos</button>
+      </div>
+      <div class="cot-sugerencias" id="cotSugerencias" style="display:none"></div>
+      <div class="cot-aviso" id="cotAviso" style="display:none"></div>
+    </div>
     <div class="form-row cols-3">
       <div class="field">
         <label>N° de Orden <span style="color:var(--warm-gray);font-weight:400;font-size:12px;">(provisional, se confirma al enviar)</span></label>
@@ -1841,6 +1870,7 @@ function limpiarTodo() {
   document.getElementById('productosBody').innerHTML='';
   agregarFila(); agregarFila(); agregarFila();
   limpiarFirma('firmaComprador'); limpiarFirma('firmaVendedor');
+  limpiarCargaCotizacion();
   mostrarToast('✅ Nueva orden lista');
 }
 
@@ -3317,6 +3347,174 @@ Se enviará por WhatsApp la invitación para dejar una reseña en Google a ${o.c
     btn.disabled = false;
     btn.textContent = textoOriginal;
   }
+}
+
+// ========================
+// CARGAR DESDE COTIZACIÓN
+// ========================
+let _cotSugTimer = null;
+function _escCot(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function normalizarNumCot(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  return d ? 'COT-' + d.padStart(4, '0') : String(raw || '').trim().toUpperCase();
+}
+function _cotHeaders() { return { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }; }
+
+function _pintarSugerenciasCot(data, titulo) {
+  const box = document.getElementById('cotSugerencias');
+  if (!Array.isArray(data) || data.length === 0) {
+    box.innerHTML = '<div class="cot-sug-item"><span class="cot-sug-meta">Sin resultados</span></div>';
+  } else {
+    box.innerHTML = (titulo ? '<div class="cot-sug-titulo">' + _escCot(titulo) + '</div>' : '') + data.map(c => {
+      const f = c.fecha_cotizacion ? new Date(c.fecha_cotizacion + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+      const v = c.valor_total ? '$' + Number(c.valor_total).toLocaleString('es-CO') : '';
+      return '<div class="cot-sug-item" data-id="' + _escCot(c.id) + '"><span class="cot-sug-num">' + _escCot(c.numero_cotizacion) + '</span><span>👤 ' + _escCot(c.cliente || '—') + '</span><span class="cot-sug-meta">' + _escCot([f, v].filter(Boolean).join(' · ')) + '</span></div>';
+    }).join('');
+    box.querySelectorAll('.cot-sug-item[data-id]').forEach(it => it.addEventListener('click', () => {
+      box.style.display = 'none';
+      cargarCotizacionPorId(it.dataset.id);
+    }));
+  }
+  box.style.display = '';
+}
+
+async function buscarCotizacionesSugerencias() {
+  const raw = document.getElementById('cotRef').value.trim();
+  const box = document.getElementById('cotSugerencias');
+  if (!raw) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  clearTimeout(_cotSugTimer);
+  _cotSugTimer = setTimeout(async () => {
+    try {
+      const digitos = raw.replace(/\D/g, '');
+      const filtro = digitos && raw.replace(/[\d\s\-\/COTcot]/g, '') === ''
+        ? `numero_cotizacion=ilike.*${digitos}*`
+        : `cliente=ilike.*${encodeURIComponent(raw)}*`;
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?${filtro}&select=id,numero_cotizacion,cliente,fecha_cotizacion,valor_total&order=created_at.desc&limit=8`, { headers: _cotHeaders() });
+      _pintarSugerenciasCot(await res.json());
+    } catch (e) { box.style.display = 'none'; }
+  }, 250);
+}
+
+function _cotSet(id, v) {
+  if (v == null || String(v).trim() === '') return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const val = String(v);
+  if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === val || o.text === val)) el.add(new Option(val, val));
+  el.value = val;
+}
+
+async function cargarDesdeCotizacion() {
+  const raw = (document.getElementById('cotRef').value || '').trim();
+  if (!raw) { mostrarToast('⚠ Escribe un N° de cotización'); return; }
+  const num = normalizarNumCot(raw);
+  const btn = document.getElementById('btnCargarCot');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?numero_cotizacion=eq.${encodeURIComponent(num)}&select=id,numero_cotizacion,cliente,fecha_cotizacion,valor_total&order=created_at.desc&limit=10`, { headers: _cotHeaders() });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) { mostrarToast('⚠ No se encontró la cotización ' + num); return; }
+    if (data.length === 1) { await cargarCotizacionPorId(data[0].id); return; }
+    // Varias cotizaciones comparten el mismo número: se elige cuál cargar
+    _pintarSugerenciasCot(data, 'Hay varias cotizaciones con el número ' + num + '. Elige cuál cargar:');
+  } catch (e) {
+    console.error(e);
+    mostrarToast('✗ Error al cargar — revisa la conexión');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cargarCotizacionPorId(id) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cotizaciones?id=eq.${encodeURIComponent(id)}&select=*&limit=1`, { headers: _cotHeaders() });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) { mostrarToast('⚠ No se encontró esa cotización'); return; }
+    const c = data[0];
+    const hayDatos = document.getElementById('clienteNombre').value.trim() ||
+      [...document.querySelectorAll('.producto-row')].some(r => (r.querySelectorAll('input')[1]?.value || '').trim());
+    if (hayDatos && !confirm('Ya hay datos en esta orden. ¿Reemplazarlos con los de la cotización ' + c.numero_cotizacion + '?')) return;
+    document.getElementById('cotSugerencias').style.display = 'none';
+    aplicarCotizacion(c, !!hayDatos);
+  } catch (e) {
+    console.error(e);
+    mostrarToast('✗ Error al cargar — revisa la conexión');
+  }
+}
+
+function aplicarCotizacion(c, reemplazar) {
+  const lineas = Array.isArray(c.productos) ? c.productos : [];
+  const meta = lineas.find(p => p.esMeta) || {};
+  const items = lineas.filter(p => !p.esMeta && !p.esDescuento && (p.qty || p.desc));
+
+  // Se limpian los datos del cliente anterior para no mezclar clientes: lo que la cotización no trae queda vacío
+  ['clienteNombre', 'clienteTel', 'clienteDireccion', 'clienteCC', 'clienteCorreo', 'clienteTelOpcional'].forEach(id => { document.getElementById(id).value = ''; });
+  resetCiudad();
+  if (reemplazar) document.getElementById('vendedor').value = '';
+  // Cliente
+  _cotSet('clienteNombre', c.cliente);
+  _cotSet('clienteTel', c.telefono);
+  _cotSet('clienteDireccion', meta.direccion);
+  _cotSet('clienteCC', meta.cc);
+  _cotSet('clienteCorreo', meta.correo);
+  _cotSet('vendedor', c.vendedor);
+  if (meta.ciudad) {
+    const sel = document.getElementById('clienteCiudad');
+    if ([...sel.options].some(o => o.value === meta.ciudad)) { sel.value = meta.ciudad; onCiudadChange(); }
+    else { sel.value = '__otra__'; onCiudadChange(); document.getElementById('clienteCiudadOtra').value = meta.ciudad; }
+  }
+
+  // Productos. Si la cotización tenía descuento, el total de la orden debe ser el precio que aceptó
+  // el cliente: se reparte el descuento entre los muebles (en múltiplos de $5.000, la última fila absorbe la diferencia).
+  const fl = items.map(p => {
+    const q = parseFloat(p.qty) || 1;
+    const u = parseMonto(String(p.unitario == null ? '' : p.unitario));
+    return { qty: p.qty || '1', q: q, desc: p.desc || '', u: u, sub: q * u };
+  });
+  const S = fl.reduce((a, f) => a + f.sub, 0);
+  const T = Number(c.valor_total) || S;
+  const conDescuento = S > 0 && T > 0 && T < S - 0.5;
+  if (conDescuento) {
+    const factor = T / S;
+    let acumulado = 0;
+    fl.forEach((f, i) => {
+      const subNuevo = i === fl.length - 1 ? T - acumulado : Math.round(f.sub * factor / 5000) * 5000;
+      acumulado += subNuevo;
+      f.u = Math.round(subNuevo / f.q);
+    });
+  }
+
+  filas = [];
+  document.getElementById('productosBody').innerHTML = '';
+  if (fl.length === 0) { agregarFila(); agregarFila(); agregarFila(); }
+  fl.forEach(f => {
+    agregarFila();
+    const id = filaCounter - 1;
+    document.querySelector('.qty-' + id).value = f.qty;
+    document.querySelector('.desc-' + id).value = f.desc;
+    document.querySelector('.ref-' + id).value = c.numero_cotizacion || '';
+    document.querySelector('.price-' + id).value = f.u > 0 ? formatPesos(f.u) : '';
+  });
+  filas.forEach(id => calcularSubtotal(id));
+
+  // Aviso
+  const totalFinal = filas.reduce((a, id) => a + (parseFloat(document.querySelector('.qty-' + id)?.value) || 0) * parseMonto(document.querySelector('.price-' + id)?.value), 0);
+  const msgs = ['✓ Cotización <strong>' + _escCot(c.numero_cotizacion) + '</strong> cargada · Cliente: <strong>' + _escCot(c.cliente || '—') + '</strong> · Total <strong>' + formatPesos(totalFinal) + '</strong>'];
+  let atencion = false;
+  if (conDescuento) msgs.push('Tenía descuento: precio normal ' + formatPesos(S) + ' → ' + formatPesos(T) + '. Se cargaron los precios ya con el descuento repartido, para que el total de la orden sea el precio aceptado.');
+  if (conDescuento && Math.round(totalFinal) !== Math.round(T)) { atencion = true; msgs.push('⚠ El total quedó diferente al de la cotización por ' + formatPesos(Math.abs(totalFinal - T)) + ': ajusta un precio.'); }
+  if (!lineas.some(p => p.esMeta)) { atencion = true; msgs.push('⚠ Esta cotización es anterior a la función de guardar cédula, dirección, ciudad y correo: complétalos si hacen falta.'); }
+  msgs.push('Revisa la forma de pago, los abonos y las firmas antes de enviar.');
+  const aviso = document.getElementById('cotAviso');
+  aviso.innerHTML = msgs.map(m => '<div>' + m + '</div>').join('');
+  aviso.className = 'cot-aviso' + (atencion ? ' atencion' : '');
+  aviso.style.display = '';
+  mostrarToast('✓ Datos cargados desde ' + c.numero_cotizacion);
+}
+
+function limpiarCargaCotizacion() {
+  const r = document.getElementById('cotRef'); if (r) r.value = '';
+  ['cotAviso', 'cotSugerencias'].forEach(id => { const e = document.getElementById(id); if (e) { e.style.display = 'none'; e.innerHTML = ''; } });
 }
 
 document.getElementById('editOverlay').addEventListener('click', function(e){ if(e.target===this)cerrarEditar(); });
