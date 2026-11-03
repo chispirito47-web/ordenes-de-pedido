@@ -1,8 +1,10 @@
 // Servidor intermedio hacia WAHA (WhatsApp).
-// Solo permite ENVIAR TEXTO con el formato que usan las apps; cualquier otra cosa se rechaza.
+// Solo permite ENVIAR TEXTO y PDF (de nuestro propio almacenamiento) con el formato que usan las apps; cualquier otra cosa se rechaza.
 // La clave y la dirección deben vivir en variables de entorno de Vercel (WAHA_KEY, WAHA_URL).
 // Los valores de respaldo de abajo se retirarán en cuanto la clave nueva esté configurada en Vercel.
-const ENDPOINTS_PERMITIDOS = new Set(['/api/sendText']);
+const ENDPOINTS_PERMITIDOS = new Set(['/api/sendText', '/api/sendFile']);
+// Los archivos solo pueden venir de la carpeta pública "ordenes" de nuestro Supabase
+const PREFIJO_ARCHIVOS = 'https://pqpzhmopnigxyacwdjbc.supabase.co/storage/v1/object/public/ordenes/';
 const WAHA_URL = process.env.WAHA_URL || "https://conjuror-deviator-unleveled.ngrok-free.dev";
 const WAHA_KEY = process.env.WAHA_KEY || "7a498bf58d914dfba845841aca339131";
 const MAX_TEXTO = 5000;
@@ -12,10 +14,25 @@ function validarEnvio(endpoint, payload) {
   if (!payload || typeof payload !== 'object') return { error: 'Payload inválido' };
   if (payload.session !== 'default') return { error: 'Sesión inválida' };
   if (typeof payload.chatId !== 'string' || !/^\d{8,15}@c\.us$/.test(payload.chatId)) return { error: 'chatId inválido' };
+  if (endpoint === '/api/sendFile') return validarArchivo(payload);
   if (typeof payload.text !== 'string' || payload.text.length === 0 || payload.text.length > MAX_TEXTO) return { error: 'Texto inválido' };
   // Solo se reenvían los campos conocidos
   const limpio = { session: payload.session, chatId: payload.chatId, text: payload.text };
   if (typeof payload.linkPreview === 'boolean') limpio.linkPreview = payload.linkPreview;
+  return { payload: limpio };
+}
+
+function validarArchivo(payload) {
+  const f = payload.file;
+  if (!f || typeof f !== 'object') return { error: 'Archivo inválido' };
+  if (f.mimetype !== 'application/pdf') return { error: 'Solo se permiten PDF' };
+  if (typeof f.url !== 'string' || !f.url.startsWith(PREFIJO_ARCHIVOS) || f.url.includes('..') || !/\.pdf$/i.test(f.url)) return { error: 'URL de archivo no permitida' };
+  if (typeof f.filename !== 'string' || !/^[\w.\- ]{1,100}$/.test(f.filename)) return { error: 'Nombre de archivo inválido' };
+  const limpio = { session: payload.session, chatId: payload.chatId, file: { mimetype: f.mimetype, url: f.url, filename: f.filename } };
+  if (payload.caption !== undefined) {
+    if (typeof payload.caption !== 'string' || payload.caption.length > 1000) return { error: 'Texto del archivo inválido' };
+    limpio.caption = payload.caption;
+  }
   return { payload: limpio };
 }
 
