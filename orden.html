@@ -2121,94 +2121,134 @@ function formatearAbonoHistorial(input) {
 async function generarComprobanteAbono(o, monto, medio, nuevoAbono, nuevoSaldo) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:[80, 140] });
-  const W = 80, margin = 6;
+  const W = 80, H = 140, mx = 6.8;
+  const GOLD=[214,178,92], DARK=[28,26,23], BROWN=[107,79,53], GRAY=[158,148,136], LINE=[225,213,200];
 
-  // Header oscuro
-  doc.setFillColor(28,26,23);
-  doc.rect(0, 0, W, 28, 'F');
+  // texto con espacio entre letras (alinear: 'l' | 'c' | 'r')
+  const spaced = (t, x, y, sp, align='l') => {
+    const ch = String(t).split('');
+    const w = ch.reduce((s,c)=>s+doc.getTextWidth(c),0) + sp*(ch.length-1);
+    let cx = align==='c' ? x-w/2 : align==='r' ? x-w : x;
+    ch.forEach(c => { doc.text(c, cx, y); cx += doc.getTextWidth(c)+sp; });
+  };
 
-  // Logo si está disponible
-  if (window.LOGO_DATA_URL) {
-    doc.addImage(window.LOGO_DATA_URL, 'JPEG', margin, 3, 14, 14);
-  }
+  // Fondo marfil
+  doc.setFillColor(252,252,248);
+  doc.rect(0, 0, W, H, 'F');
 
-  doc.setTextColor(196,154,60);
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(11);
-  doc.text('CASA DAMS', margin + 16, 10);
+  // Encabezado oscuro
+  doc.setFillColor(...DARK);
+  doc.rect(0, 0, W, 27, 'F');
+  doc.setTextColor(...GOLD);
+  doc.setFont('times','normal');
+  doc.setFontSize(13.6);
+  spaced('CASA DAMS', mx, 10.4, 1.0);
   doc.setFont('helvetica','normal');
-  doc.setFontSize(6);
-  doc.setTextColor(158,148,136);
-  doc.text('Muebles Nacionales e Importados', margin + 16, 15);
-  doc.text('Cra. 4 N° 49-71 B/Los Laureles 2, Montería', margin + 16, 19);
-  doc.text('Cel. 321 540 0839', margin + 16, 23);
-
-  // Título comprobante
-  doc.setFillColor(196,154,60);
-  doc.rect(0, 28, W, 8, 'F');
-  doc.setTextColor(28,26,23);
+  doc.setFontSize(4.6);
+  doc.setTextColor(...GRAY);
+  spaced('MUEBLES NACIONALES E IMPORTADOS', mx, 14.6, 0.42);
+  // Orden (derecha)
+  doc.setFontSize(4.8);
+  spaced('ORDEN', W-mx, 7.6, 0.6, 'r');
   doc.setFont('helvetica','bold');
   doc.setFontSize(8);
-  doc.text('COMPROBANTE DE ABONO', W/2, 33.5, {align:'center'});
+  doc.setTextColor(255,255,255);
+  doc.text(String(o.numero_orden || o.op || '—'), W-mx, 11.3, {align:'right'});
+  // Línea fina dorada y título
+  doc.setDrawColor(98,82,48);
+  doc.setLineWidth(0.15);
+  doc.line(mx, 18.3, W-mx, 18.3);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(5.6);
+  doc.setTextColor(255,255,255);
+  spaced('COMPROBANTE DE ABONO', mx, 23.4, 0.75);
 
-  // Fecha y hora
+  // Recibido de
   const ahora = new Date();
   const fechaStr = ahora.toLocaleDateString('es-CO', {day:'2-digit', month:'long', year:'numeric'});
   const horaStr  = ahora.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+  doc.setFontSize(4.8);
+  doc.setTextColor(...GRAY);
+  spaced('RECIBIDO DE', mx, 33.3, 0.5);
+  doc.setFont('times','normal');
+  doc.setFontSize(12);
+  doc.setTextColor(...DARK);
+  doc.text(o.cliente || '—', mx, 39.2);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6.6);
+  doc.setTextColor(...BROWN);
+  doc.text(fechaStr + ' · ' + horaStr, mx, 43.4);
+  doc.setDrawColor(...DARK);
+  doc.setLineWidth(0.3);
+  doc.line(mx, 47.7, W-mx, 47.7);
 
-  let y = 42;
-  const drawFila = (label, valor, bold=false) => {
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(6.5);
-    doc.setTextColor(107,79,53);
-    doc.text(label, margin, y);
-    doc.setFont('helvetica', bold?'bold':'normal');
-    doc.setFontSize(bold?8:7.5);
-    doc.setTextColor(28,26,23);
-    doc.text(valor, W - margin, y, {align:'right'});
-    doc.setDrawColor(212,201,184);
-    doc.setLineWidth(0.2);
-    doc.line(margin, y+1.5, W-margin, y+1.5);
-    y += 8;
-  };
+  // Abono + medio de pago
+  doc.setFontSize(4.8);
+  doc.setTextColor(...GRAY);
+  spaced('ABONO', mx, 52.6, 0.5);
+  doc.setFont('times','normal');
+  doc.setFontSize(18.5);
+  doc.setTextColor(...DARK);
+  doc.text(formatCOP(monto), mx, 61.4);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6.4);
+  const medioTxt = String(medio || '');
+  const pw = doc.getTextWidth(medioTxt) + 7;
+  doc.setFillColor(245,238,232);
+  doc.roundedRect(W-mx-pw, 56.2, pw, 4.9, 2.4, 2.4, 'F');
+  doc.setTextColor(...BROWN);
+  doc.text(medioTxt, W-mx-pw/2, 59.4, {align:'center'});
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
+  doc.line(mx, 64.7, W-mx, 64.7);
 
-  drawFila('Fecha:', fechaStr);
-  drawFila('Hora:', horaStr);
-  drawFila('Orden N°:', String(o.numero_orden || o.op || '—'));
-  drawFila('Cliente:', o.cliente || '—');
-
-  y += 2;
-  doc.setFillColor(245,240,232);
-  doc.rect(margin, y-3, W - margin*2, 26, 'F');
-  doc.setDrawColor(196,154,60);
-  doc.setLineWidth(0.4);
-  doc.rect(margin, y-3, W - margin*2, 26);
-
+  // Saldos
   const totalOrden = o.valor_total || 0;
-  const saldoAnterior = (o.abono || 0);  // abono antes de este pago
-  drawFila('Saldo anterior:', formatCOP(Math.max(totalOrden - saldoAnterior, 0)));
-  drawFila('Abono:', formatCOP(monto) + ' (' + medio + ')', true);
-  const saldoReal = Math.max(nuevoSaldo, 0);
-  drawFila('Saldo pendiente:', formatCOP(saldoReal));
+  const saldoAnterior = Math.max(totalOrden - (o.abono || 0), 0);  // antes de este pago
+  doc.setFontSize(6.6);
+  doc.setTextColor(...BROWN);
+  doc.text('Saldo anterior', mx, 70.3);
+  doc.text('Este abono', mx, 75.8);
+  doc.setFontSize(7.2);
+  doc.setTextColor(...DARK);
+  doc.text(formatCOP(saldoAnterior), W-mx, 70.3, {align:'right'});
+  doc.text('– ' + formatCOP(monto), W-mx, 75.8, {align:'right'});
 
-  y += 2;
+  // Saldo pendiente
+  const saldoReal = Math.max(nuevoSaldo, 0);
+  doc.setFillColor(243,238,233);
+  doc.rect(mx, 80.8, W-mx*2, 11.8, 'F');
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(5.4);
+  doc.setTextColor(...DARK);
+  spaced('SALDO PENDIENTE', mx+4.2, 87.6, 0.5);
+  doc.setFontSize(10);
+  doc.text(formatCOP(saldoReal), W-mx-3.4, 87.9, {align:'right'});
+
   if (totalOrden > 0 && nuevoSaldo <= 0) {
     doc.setFillColor(209,250,229);
-    doc.rect(margin, y, W - margin*2, 10, 'F');
+    doc.rect(mx, 95, W-mx*2, 8.5, 'F');
     doc.setFont('helvetica','bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(6.6);
     doc.setTextColor(6,95,70);
-    doc.text('✅ ORDEN COMPLETAMENTE PAGADA', W/2, y+6.5, {align:'center'});
-    y += 14;
+    doc.text('ORDEN COMPLETAMENTE PAGADA', W/2, 100.3, {align:'center'});
   }
 
   // Pie
-  y += 4;
-  doc.setFont('helvetica','italic');
-  doc.setFontSize(6);
-  doc.setTextColor(158,148,136);
-  doc.text('Gracias por su pago. Este documento es su', W/2, y, {align:'center'}); y+=4;
-  doc.text('soporte de pago oficial — Casa Dams 2025.', W/2, y, {align:'center'});
+  doc.setFont('times','italic');
+  doc.setFontSize(8.2);
+  doc.setTextColor(...DARK);
+  doc.text('Gracias por su pago.', mx, 121.4);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(5.4);
+  doc.setTextColor(...GRAY);
+  doc.text('Este documento es su soporte de pago oficial.', mx, 125.1);
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
+  doc.line(mx, 128.7, W-mx, 128.7);
+  doc.setFontSize(4.9);
+  doc.text('Cra. 4 N° 49-71 B/Los Laureles 2, Montería', mx, 132.2);
+  doc.text('321 540 0839', W-mx, 132.2, {align:'right'});
 
   return doc;
 }
