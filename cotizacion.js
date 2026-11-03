@@ -814,6 +814,21 @@ function cerrarModal() {
   document.getElementById('modalWA').classList.remove('show');
 }
 
+// Envía el PDF de la cotización como adjunto; si no se puede adjuntar, manda el link como antes (nunca lanza error)
+async function enviarPdfCotizacionWA(chatId, pdfLink, numCot) {
+  let ok = false;
+  try {
+    const nombrePdf = 'Cotizacion_' + String(numCot||'cotizacion').replace(/[^\w.-]+/g,'-') + '.pdf';
+    const r = await fetch(WAHA_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:'/api/sendFile',payload:{session:WAHA_SESSION,chatId,file:{mimetype:'application/pdf',url:pdfLink,filename:nombrePdf},caption:'📄 Cotización ' + (numCot||'')}})});
+    ok = r.ok;
+    if (!ok) console.warn('PDF adjunto no enviado:', r.status);
+  } catch(e) { console.warn('PDF adjunto no enviado:', e); }
+  if (!ok) {
+    try { await enviarMensajeWA(chatId, '📄 ' + pdfLink); } catch(e2) { console.warn('Link del PDF no enviado:', e2); }
+  }
+  return ok;
+}
+
 async function enviarWA() {
   const numero = document.getElementById('waNumero').value.replace(/\D/g, '');
   if (!numero || numero.length < 10) {
@@ -853,12 +868,12 @@ ${productosTxt}
 ${lineaTotal}
 📅 *Válida hasta:* ${formatDate(d.fechaVencimiento)}
 ${d.tiempoEntrega ? `📦 *Entrega:* ${d.tiempoEntrega}\n` : ''}
-${pdfLink ? `📄 ${pdfLink}` : ''}
 
 Quedamos atentos a su confirmación.
 📍 Cra. 4 N° 49-71, Montería · 📞 321 540 0839`;
 
     const res = await enviarMensajeWA(chatId, mensaje);
+    if (res.ok && pdfLink) await enviarPdfCotizacionWA(chatId, pdfLink, d.numero);
     if (res.ok) {
       const estabaEditando = !!editandoCotId;
       await guardarCotizacionEnSupabase(d, pdfLink, true);
@@ -1135,10 +1150,11 @@ async function reenviarWACot(cotId, btn) {
       .map(p => p.esDescuento ? `🎁 ${p.desc} — ${p.sub || ''}` : `• ${p.qty || 1}x ${p.desc} — ${p.sub || ''}`)
       .join('\n');
 
-    const mensaje = `🛋️ *CASA DAMS — Cotización ${c.numero_cotizacion || '—'}*\n\nHola ${c.cliente || 'cliente'}, le compartimos la cotización solicitada:\n\n${productosTxt}\n\n💰 *Total:* $${Number(c.valor_total||0).toLocaleString('es-CO')}\n${c.fecha_vencimiento ? `📅 *Válida hasta:* ${new Date(c.fecha_vencimiento+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}\n` : ''}${c.pdf_url ? `📄 ${c.pdf_url}` : ''}\n\nQuedamos atentos a su confirmación.\n📍 Cra. 4 N° 49-71, Montería · 📞 321 540 0839`;
+    const mensaje = `🛋️ *CASA DAMS — Cotización ${c.numero_cotizacion || '—'}*\n\nHola ${c.cliente || 'cliente'}, le compartimos la cotización solicitada:\n\n${productosTxt}\n\n💰 *Total:* $${Number(c.valor_total||0).toLocaleString('es-CO')}\n${c.fecha_vencimiento ? `📅 *Válida hasta:* ${new Date(c.fecha_vencimiento+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}\n` : ''}${c.pdf_url ? '' : ''}\nQuedamos atentos a su confirmación.\n📍 Cra. 4 N° 49-71, Montería · 📞 321 540 0839`;
 
     const res = await enviarMensajeWA(chatId, mensaje);
     if (!res.ok) throw new Error('WAHA error');
+    if (c.pdf_url) await enviarPdfCotizacionWA(chatId, c.pdf_url, c.numero_cotizacion);
 
     // Marcar como enviado en Supabase
     await fetch(`${_SUPA_URL}/rest/v1/cotizaciones?id=eq.${cotId}`, {
