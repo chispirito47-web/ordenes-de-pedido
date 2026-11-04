@@ -1802,6 +1802,13 @@ async function enviarWhatsApp() {
   // Cerrar modal AQUÍ — cuando todo terminó
   cerrarModal();
 
+  // La orden ya quedó guardada: limpiar el formulario para que nadie la vuelva a
+  // enviar por error (antes los datos seguían ahí y se duplicaban órdenes).
+  try {
+    const waInp = document.getElementById('waNumero'); if (waInp) waInp.value = '';
+    limpiarTodo(true);
+  } catch(eLimpiar) { console.warn('No se pudo limpiar el formulario:', eLimpiar); }
+
   if (waOk) {
     mostrarToast(pdfLink ? '✅ Orden guardada y enviada con PDF' : '✅ Orden guardada y enviada');
   } else {
@@ -1831,8 +1838,8 @@ async function reservarNumeroOrden() {
 // ========================
 // UTILS
 // ========================
-function limpiarTodo() {
-  if (!confirm('¿Crear nueva orden? Se perderán los datos actuales.')) return;
+function limpiarTodo(sinConfirmar) {
+  if (sinConfirmar !== true && !confirm('¿Crear nueva orden? Se perderán los datos actuales.')) return;
   // Solo leemos para mostrar el preview (NO consume el consecutivo).
   // El número real se reserva atómicamente al enviar con el RPC.
   fetch(`${SUPABASE_URL}/rest/v1/consecutivos?clave=eq.orden&select=valor`, {
