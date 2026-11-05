@@ -583,7 +583,7 @@ function fmtCOP(n) {
 function parseMonto(str) {
   return parseInt(String(str||'').replace(/[^0-9]/g,''),10)||0;
 }
-function hoyISO() { return new Date().toISOString().slice(0,10); }
+function hoyISO() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }); }
 const MESES = ['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const MESES_ABR = ['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 function fmtFecha(iso, largo) {

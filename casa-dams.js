@@ -36,7 +36,8 @@ function addDays(dateStr, days) {
 }
 
 function today() {
-  return new Date().toISOString().split('T')[0];
+  // Día de hoy en hora de Colombia (toISOString usa UTC y desde las 7 pm ya da el día siguiente)
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 /* ---------- NÚMERO EN LETRAS ---------- */

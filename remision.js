@@ -695,7 +695,7 @@ ${pdfLink ? `\n📄 ${pdfLink}` : ''}
             numero_remision: d2.numero, orden_ref: d2.ordenRef||'',
             cliente: d2.nombre||'', telefono: d2.tel||'',
             cedula: d2.cc||'', direccion: d2.direccion||'',
-            ciudad: d2.ciudad||'', fecha_entrega: d2.fecha||new Date().toISOString().split('T')[0],
+            ciudad: d2.ciudad||'', fecha_entrega: d2.fecha||new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             vendedor: d2.vendedor||'',
             items: items.filter(i=>i.qty||i.desc),
             observaciones: d2.observaciones||'',

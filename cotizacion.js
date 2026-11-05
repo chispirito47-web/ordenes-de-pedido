@@ -742,7 +742,7 @@ async function guardarCotizacionEnSupabase(d, pdfLink, enviadoWA) {
     const datos = {
       numero_cotizacion: d.numero,
       cliente: d.nombre||'', telefono: d.tel||'',
-      fecha_cotizacion: d.fecha||new Date().toISOString().split('T')[0],
+      fecha_cotizacion: d.fecha||new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
       fecha_vencimiento: d.fechaVencimiento||null,
       tiempo_entrega: d.tiempoEntrega||'', vendedor: d.vendedor||'',
       productos: productosParaGuardar(),
