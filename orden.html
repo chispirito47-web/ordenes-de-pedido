@@ -1623,6 +1623,16 @@ async function enviarWhatsApp() {
   const numero = document.getElementById('waNumero').value.replace(/\D/g,'');
   if (!numero || numero.length < 10) { mostrarToast('⚠️ Ingresa un número válido'); return; }
 
+  // --- Aviso: orden sin abono (solo avisa; no cambia ningún valor ni cálculo) ---
+  // Va ANTES de reservar el número, así que si cancelan el consecutivo no se gasta.
+  try {
+    if (getTotalAbonos() <= 0 && parseMonto(getDatos().total || '0') > 0) {
+      if (!confirm('⚠️ Esta orden NO tiene ningún abono (abono $0).\n\nSi el cliente ya pagó algo, cancela y agrégalo en la sección de abonos antes de enviar.\n\n¿Enviarla así, sin abono?')) {
+        return;
+      }
+    }
+  } catch (eAviso) { console.warn('Aviso de abono no crítico:', eAviso); }
+
   // --- Candado anti doble-clic / doble envío ---
   const btnEnviar = document.getElementById('btnEnviarWA');
   if (btnEnviar && btnEnviar.disabled) return;
@@ -2750,7 +2760,14 @@ async function renderPDFaCanvas(pdfUrl, escala) {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+  // El PDF usa las letras estándar (Helvetica) sin incluirlas. Antes pdf.js las sustituía con las del
+  // aparato que subía la orden; en algunos aparatos salían rotas (títulos y números en negrita ilegibles).
+  // Ahora se usan siempre las letras propias de pdf.js, para que la imagen salga igual en cualquier aparato.
+  const pdf = await pdfjsLib.getDocument({
+    url: pdfUrl,
+    standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
+    useSystemFonts: false
+  }).promise;
   const canvasList = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
