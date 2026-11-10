@@ -1052,6 +1052,7 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="edicion-sync.js"></script>
 <script>
 // ========================
 // ESTADO
@@ -3058,6 +3059,7 @@ async function guardarEdicion(silencioso) {
   }, 0);
   const abonoActual = o.abono || 0;
   const nuevoSaldo = Math.max(totalNum - abonoActual, 0);
+  const _prodsAntesSync = JSON.parse(JSON.stringify(Array.isArray(o.productos) ? o.productos : []));
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`, {
     method: 'PATCH',
@@ -3078,6 +3080,11 @@ async function guardarEdicion(silencioso) {
 
   // Actualizar objeto local
   Object.assign(o, { ...datos, productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo });
+
+  // Actualizar también Secretaría/Gerencial (módulo aparte; si falla o se cancela, la orden igual queda guardada)
+  try {
+    if (window.EdicionSync) await window.EdicionSync.sincronizar({ o, datos, totalNum, prodsAntes: _prodsAntesSync, url: SUPABASE_URL, key: SUPABASE_KEY, prueba: MODO_PRUEBA });
+  } catch (eSync) { console.warn('Sync Secretaria:', eSync); }
 
   // Regenerar y subir PDF con datos actualizados (incluye firmas guardadas)
   if (status) { status.textContent = '⏳ Actualizando PDF...'; }
