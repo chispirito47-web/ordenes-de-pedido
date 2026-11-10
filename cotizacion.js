@@ -1102,12 +1102,12 @@ function renderHistCot(lista) {
   el.innerHTML = lista.map(c=>`
     <div style="background:#FDFCF9;border-radius:14px;border:1px solid #D4C9B8;margin-bottom:12px;overflow:hidden;cursor:pointer" onclick="verDetCot('${c.id}')">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#F5F0E8;border-bottom:1px solid #D4C9B8">
-        <div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
+        <div><div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;color:#C49A3C">${c.numero_cotizacion||'—'}</div>
         <div style="font-size:12px;color:#9E9488">${fH(c.fecha_cotizacion)}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${c.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${c.enviado_whatsapp?'#065F46':'#991B1B'}">${c.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
-          <button onclick="event.stopPropagation();editarCotizacion('${c.id}')" style="background:#fff;color:#6B4F35;border:1.5px solid #C49A3C;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">✏️ Editar</button>
-          ${!c.enviado_whatsapp?`<button id="btn-reenv-cot-${c.id}" onclick="event.stopPropagation();reenviarWACot('${c.id}',this)" style="background:#25D366;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔁 Reenviar WA</button>`:''}
+          <button onclick="event.stopPropagation();editarCotizacion('${c.id}')" style="background:#fff;color:#6B4F35;border:1.5px solid #C49A3C;border-radius:20px;padding:4px 12px;font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">✏️ Editar</button>
+          ${!c.enviado_whatsapp?`<button id="btn-reenv-cot-${c.id}" onclick="event.stopPropagation();reenviarWACot('${c.id}',this)" style="background:#25D366;color:#fff;border:none;border-radius:20px;padding:4px 12px;font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔁 Reenviar WA</button>`:''}
         </div>
       </div>
       <div style="padding:14px 18px">
@@ -1117,7 +1117,7 @@ function renderHistCot(lista) {
         </div>
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #D4C9B8;display:flex;align-items:center">
           <div><div style="font-size:10px;color:#9E9488;text-transform:uppercase;letter-spacing:1px">Total</div>
-          <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
+          <div style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:700">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
           ${c.pdf_url?`<a href="${c.pdf_url}" target="_blank" onclick="event.stopPropagation()" style="margin-left:auto;background:#C49A3C;color:#1C1A17;padding:6px 14px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">📄 PDF</a>`:''}
         </div>
       </div>
@@ -1198,7 +1198,7 @@ function verDetCot(id) {
       <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Cliente</div><div style="font-size:15px">${c.cliente||'—'}</div></div>
       <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Teléfono</div><div style="font-size:15px">${c.telefono||'—'}</div></div>
       <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Vendedor</div><div style="font-size:15px">${c.vendedor||'—'}</div></div>
-      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#27634A">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
+      <div><div style="font-size:10px;font-weight:600;color:#9E9488;letter-spacing:1px;text-transform:uppercase">Total</div><div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;color:#27634A">$${Number(c.valor_total||0).toLocaleString('es-CO')}</div></div>
     </div>${ph}`;
   o.style.display='flex';
 }

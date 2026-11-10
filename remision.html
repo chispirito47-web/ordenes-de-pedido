@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Casa Dams — Remisión</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="casa-dams.css">
 <style>
   /* =====================================================
@@ -19,7 +19,7 @@
     border: none;
     border-radius: 10px;
     padding: 13px 18px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins',sans-serif;
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -81,7 +81,7 @@
   .sugerencia-item:last-child { border-bottom: none; }
   .sugerencia-item:hover, .sugerencia-item:active { background: #F5F0E8; }
   .sugerencia-num {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Poppins',sans-serif;
     font-weight: 700;
     font-size: 15px;
     color: var(--gold);
@@ -173,7 +173,7 @@
     font-weight: 700;
     color: var(--brown);
     font-size: 17px !important;
-    font-family: 'Playfair Display', serif !important;
+    font-family: 'Poppins',sans-serif !important;
   }
   .qty-input::placeholder {
     color: var(--warm-gray-2);
@@ -218,7 +218,7 @@
     display: inline-block;
     border: 3px solid var(--green);
     color: var(--green);
-    font-family: 'Playfair Display', serif;
+    font-family: 'Poppins',sans-serif;
     font-size: 20px;
     font-weight: 700;
     padding: 8px 26px;
@@ -244,7 +244,7 @@
 
 <!-- HEADER -->
 <div class="header">
-  <a href="index.html" style="display:flex;align-items:center;gap:6px;background:rgba(196,154,60,0.12);border:1px solid rgba(196,154,60,0.3);border-radius:10px;padding:8px 14px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#C49A3C;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all 0.2s;flex-shrink:0;">&#8592; Menú</a>
+  <a href="index.html" style="display:flex;align-items:center;gap:6px;background:rgba(196,154,60,0.12);border:1px solid rgba(196,154,60,0.3);border-radius:10px;padding:8px 14px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;color:#C49A3C;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all 0.2s;flex-shrink:0;">&#8592; Menú</a>
   <div class="header-brand">
     <a href="index.html" class="back-pill" aria-label="Volver">←</a>
     <a href="index.html" class="brand-link">
@@ -263,8 +263,8 @@
 
 <!-- PESTAÑAS -->
 <div style="display:flex;background:#1C1A17;padding:0 24px;gap:4px;border-top:1px solid rgba(255,255,255,0.08)">
-  <button id="tabBtnRem" onclick="cambiarTabRem('nueva')" style="padding:12px 24px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#C49A3C;cursor:pointer;border-bottom:3px solid #C49A3C;transition:all 0.2s">📋 Nueva Remisión</button>
-  <button id="tabBtnHistRem" onclick="cambiarTabRem('historial')" style="padding:12px 24px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#9E9488;cursor:pointer;border-bottom:3px solid transparent;transition:all 0.2s">🗂 Historial</button>
+  <button id="tabBtnRem" onclick="cambiarTabRem('nueva')" style="padding:12px 24px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#C49A3C;cursor:pointer;border-bottom:3px solid #C49A3C;transition:all 0.2s">📋 Nueva Remisión</button>
+  <button id="tabBtnHistRem" onclick="cambiarTabRem('historial')" style="padding:12px 24px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#9E9488;cursor:pointer;border-bottom:3px solid transparent;transition:all 0.2s">🗂 Historial</button>
 </div>
 
 <div id="tabRemNueva">
@@ -388,7 +388,7 @@
       </div>
     </div>
     <input type="file" id="fotoEntregaInput" accept="image/*" style="display:none" onchange="cargarFotoEntrega(this)">
-    <button id="btnQuitarFoto" onclick="quitarFotoEntrega()" style="display:none;margin-top:10px;background:transparent;border:1px solid #D4C9B8;border-radius:8px;padding:8px 14px;font-family:'DM Sans',sans-serif;font-size:12px;color:#9E9488;cursor:pointer">✕ Quitar foto</button>
+    <button id="btnQuitarFoto" onclick="quitarFotoEntrega()" style="display:none;margin-top:10px;background:transparent;border:1px solid #D4C9B8;border-radius:8px;padding:8px 14px;font-family:'Poppins',sans-serif;font-size:12px;color:#9E9488;cursor:pointer">✕ Quitar foto</button>
   </div>
 
   <!-- CLÁUSULAS ESPECIALES -->
@@ -451,15 +451,15 @@
 <div id="tabRemHistorial" style="display:none">
   <div class="container" style="padding-top:20px">
     <div style="background:#FDFCF9;border-radius:14px;padding:16px 20px;margin-bottom:12px;border:1px solid #D4C9B8;display:flex;gap:12px;align-items:center">
-      <input type="text" id="historialRemBuscar" placeholder="Buscar por cliente, N° remisión, vendedor..." oninput="filtrarRemisiones()" style="flex:1;background:#F5F0E8;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:15px;color:#1C1A17">
+      <input type="text" id="historialRemBuscar" placeholder="Buscar por cliente, N° remisión, vendedor..." oninput="filtrarRemisiones()" style="flex:1;background:#F5F0E8;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-family:'Poppins',sans-serif;font-size:15px;color:#1C1A17">
       <button onclick="cargarHistorialRem()" style="background:transparent;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-size:18px;cursor:pointer;color:#9E9488">↻</button>
     </div>
     <!-- Filtro por fecha -->
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:0 2px;">
       <span style="font-size:11px;color:#9E9488;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Fecha entrega</span>
-      <input type="date" id="filtroRemDesde" onchange="filtrarRemisiones()" style="padding:7px 10px;border:1.5px solid #D4C9B8;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;background:#F5F0E8;color:#1C1A17;">
+      <input type="date" id="filtroRemDesde" onchange="filtrarRemisiones()" style="padding:7px 10px;border:1.5px solid #D4C9B8;border-radius:10px;font-family:'Poppins',sans-serif;font-size:13px;background:#F5F0E8;color:#1C1A17;">
       <span style="font-size:11px;color:#9E9488;font-weight:600;">—</span>
-      <input type="date" id="filtroRemHasta" onchange="filtrarRemisiones()" style="padding:7px 10px;border:1.5px solid #D4C9B8;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;background:#F5F0E8;color:#1C1A17;">
+      <input type="date" id="filtroRemHasta" onchange="filtrarRemisiones()" style="padding:7px 10px;border:1.5px solid #D4C9B8;border-radius:10px;font-family:'Poppins',sans-serif;font-size:13px;background:#F5F0E8;color:#1C1A17;">
       <button onclick="limpiarFiltrosFechaRem()" style="padding:7px 10px;border-radius:10px;border:1.5px solid #D4C9B8;background:transparent;color:#9E9488;font-size:12px;cursor:pointer;" title="Limpiar fechas">✕</button>
       <span id="resumenRem" style="font-size:12px;color:#9E9488;margin-left:4px;"></span>
     </div>

@@ -817,7 +817,7 @@ function renderHistRem(lista) {
   el.innerHTML = lista.map(r=>`
     <div style="background:#FDFCF9;border-radius:14px;border:1px solid #D4C9B8;margin-bottom:12px;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#F5F0E8;border-bottom:1px solid #D4C9B8">
-        <div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C49A3C">${r.numero_remision||'—'}</div>
+        <div><div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;color:#C49A3C">${r.numero_remision||'—'}</div>
         <div style="font-size:12px;color:#9E9488">${fH(r.fecha_entrega)}</div></div>
         <span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:${r.enviado_whatsapp?'#D1FAE5':'#FEE2E2'};color:${r.enviado_whatsapp?'#065F46':'#991B1B'}">${r.enviado_whatsapp?'✅ Enviada':'📋 Sin enviar'}</span>
       </div>

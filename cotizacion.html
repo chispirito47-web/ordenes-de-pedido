@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Casa Dams — Cotización</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="casa-dams.css">
 <style>
   /* =====================================================
@@ -27,7 +27,7 @@
     background: transparent;
     padding: 7px 16px;
     border-radius: 100px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins',sans-serif;
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -92,7 +92,7 @@
     border-radius: 6px;
     padding: 9px 8px;
     font-size: 14px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins',sans-serif;
     resize: none;
     overflow: hidden;
     min-height: 38px;
@@ -158,7 +158,7 @@
     border-radius: 8px;
     padding: 10px 12px;
     font-size: 14px;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins',sans-serif;
   }
   .producto-card input:focus {
     outline: none;
@@ -188,7 +188,7 @@
     text-transform: uppercase;
   }
   .producto-card .card-totals-value {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Poppins',sans-serif;
     font-weight: 700;
     color: var(--brown);
     font-size: 18px;
@@ -354,7 +354,7 @@
 
   /* ============ MENSAJE CLIENTE ============ */
   .mensaje-textarea {
-    font-family: 'Playfair Display', serif !important;
+    font-family: 'Poppins',sans-serif !important;
     font-style: italic;
     font-size: 15px !important;
     line-height: 1.6;
@@ -415,17 +415,17 @@
   /* ---- Aviso de edición ---- */
   .banner-edicion { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: #FFF3DC; border: 1.5px solid var(--gold); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; }
   .be-texto { font-size: 13.5px; color: var(--dark); line-height: 1.5; flex: 1; min-width: 240px; }
-  .be-texto b { display: block; font-family: 'Playfair Display', serif; font-size: 16px; color: var(--brown); }
+  .be-texto b { display: block; font-family: 'Poppins',sans-serif; font-size: 16px; color: var(--brown); }
   .be-acciones { display: flex; align-items: center; gap: 12px; }
   .be-acciones a { font-size: 13px; font-weight: 600; color: var(--brown); text-decoration: underline; text-underline-offset: 3px; }
-  .be-acciones button { background: var(--dark); color: var(--gold); border: none; border-radius: 999px; padding: 8px 16px; font-family: 'DM Sans', sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .be-acciones button { background: var(--dark); color: var(--gold); border: none; border-radius: 999px; padding: 8px 16px; font-family: 'Poppins',sans-serif; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
 
 <!-- HEADER -->
 <div class="header">
-  <a href="index.html" style="display:flex;align-items:center;gap:6px;background:rgba(196,154,60,0.12);border:1px solid rgba(196,154,60,0.3);border-radius:10px;padding:8px 14px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#C49A3C;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all 0.2s;flex-shrink:0;">&#8592; Menú</a>
+  <a href="index.html" style="display:flex;align-items:center;gap:6px;background:rgba(196,154,60,0.12);border:1px solid rgba(196,154,60,0.3);border-radius:10px;padding:8px 14px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;color:#C49A3C;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all 0.2s;flex-shrink:0;">&#8592; Menú</a>
   <div class="header-brand">
     <a href="index.html" class="back-pill" aria-label="Volver">←</a>
     <a href="index.html" class="brand-link">
@@ -444,8 +444,8 @@
 
 <!-- PESTAÑAS -->
 <div style="display:flex;background:#1C1A17;padding:0 24px;gap:4px;border-top:1px solid rgba(255,255,255,0.08)">
-  <button id="tabBtnCot" onclick="cambiarTabCot('nueva')" style="padding:12px 24px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#C49A3C;cursor:pointer;border-bottom:3px solid #C49A3C;transition:all 0.2s">📋 Nueva Cotización</button>
-  <button id="tabBtnHist" onclick="cambiarTabCot('historial')" style="padding:12px 24px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#9E9488;cursor:pointer;border-bottom:3px solid transparent;transition:all 0.2s">🗂 Historial</button>
+  <button id="tabBtnCot" onclick="cambiarTabCot('nueva')" style="padding:12px 24px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#C49A3C;cursor:pointer;border-bottom:3px solid #C49A3C;transition:all 0.2s">📋 Nueva Cotización</button>
+  <button id="tabBtnHist" onclick="cambiarTabCot('historial')" style="padding:12px 24px;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:none;background:transparent;color:#9E9488;cursor:pointer;border-bottom:3px solid transparent;transition:all 0.2s">🗂 Historial</button>
 </div>
 
 <div id="tabCotNueva">
@@ -635,7 +635,7 @@
 <div id="tabCotHistorial" style="display:none">
   <div class="container" style="padding-top:20px">
     <div style="background:#FDFCF9;border-radius:14px;padding:16px 20px;margin-bottom:16px;border:1px solid #D4C9B8;display:flex;gap:12px;align-items:center">
-      <input type="text" id="historialCotBuscar" placeholder="Buscar por cliente, N° cotización, vendedor..." oninput="filtrarCotizaciones()" style="flex:1;background:#F5F0E8;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-family:'DM Sans',sans-serif;font-size:15px;color:#1C1A17">
+      <input type="text" id="historialCotBuscar" placeholder="Buscar por cliente, N° cotización, vendedor..." oninput="filtrarCotizaciones()" style="flex:1;background:#F5F0E8;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-family:'Poppins',sans-serif;font-size:15px;color:#1C1A17">
       <button onclick="cargarHistorialCot()" style="background:transparent;border:1.5px solid #D4C9B8;border-radius:10px;padding:12px 16px;font-size:18px;cursor:pointer;color:#9E9488">↻</button>
     </div>
     <div id="historialCotLista">
@@ -648,8 +648,8 @@
 <div id="detalleCotOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:flex-end;justify-content:center">
   <div style="background:#FDFCF9;border-radius:24px 24px 0 0;width:100%;max-width:900px;max-height:85vh;overflow-y:auto;padding:24px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #D4C9B8">
-      <div id="detalleCotTitulo" style="font-family:'Playfair Display',serif;font-size:22px;color:#C49A3C;font-weight:700">Cotización</div>
-      <button onclick="document.getElementById('detalleCotOverlay').style.display='none'" style="background:#F5F0E8;border:1px solid #D4C9B8;border-radius:10px;padding:8px 16px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer">✕ Cerrar</button>
+      <div id="detalleCotTitulo" style="font-family:'Poppins',sans-serif;font-size:22px;color:#C49A3C;font-weight:700">Cotización</div>
+      <button onclick="document.getElementById('detalleCotOverlay').style.display='none'" style="background:#F5F0E8;border:1px solid #D4C9B8;border-radius:10px;padding:8px 16px;font-family:'Poppins',sans-serif;font-size:14px;cursor:pointer">✕ Cerrar</button>
     </div>
     <div id="detalleCotContenido"></div>
   </div>
