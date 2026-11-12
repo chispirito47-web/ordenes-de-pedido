@@ -2910,6 +2910,10 @@ function abrirEditar(id) {
       <div class="form-row cols-1" style="margin-bottom:12px;">
         <div class="field"><label>Dirección</label><input type="text" id="eDireccion" value="${(o.direccion||'').replace(/"/g,'&quot;')}"></div>
       </div>
+      <div class="form-row cols-2" style="margin-bottom:12px;">
+        <div class="field"><label>Fecha de orden</label><input type="date" id="eFechaOrden" value="${(o.fecha_orden||'').slice(0,10)}"></div>
+        <div class="field"><label>Fecha de vencimiento</label><input type="date" id="eFechaVenc" value="${(o.fecha_vencimiento||'').slice(0,10)}"></div>
+      </div>
       <div class="form-row cols-2">
         <div class="field"><label>Forma de pago</label>
           <select id="eFormaPago">
@@ -3056,6 +3060,8 @@ function getEditDatos() {
     direccion:   document.getElementById('eDireccion')?.value || '',
     metodo_pago: document.getElementById('eFormaPago')?.value || '',
     vendedor:    document.getElementById('eVendedor')?.value || '',
+    fecha_orden:       document.getElementById('eFechaOrden')?.value || '',
+    fecha_vencimiento: document.getElementById('eFechaVenc')?.value || '',
   };
 }
 
@@ -3076,6 +3082,13 @@ async function guardarEdicion(silencioso) {
   const nuevoSaldo = Math.max(totalNum - abonoActual, 0);
   const _prodsAntesSync = JSON.parse(JSON.stringify(Array.isArray(o.productos) ? o.productos : []));
 
+  // Fechas editables: la fecha de orden vacía no borra la que ya tenía; el vencimiento vacío queda sin fecha.
+  datos.fecha_orden = datos.fecha_orden || (o.fecha_orden ? String(o.fecha_orden).slice(0,10) : null);
+  datos.fecha_vencimiento = datos.fecha_vencimiento || null;
+  const _fechasPatch = {};
+  if (datos.fecha_orden) _fechasPatch.fecha_orden = datos.fecha_orden;
+  _fechasPatch.fecha_vencimiento = datos.fecha_vencimiento;
+
   const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?id=eq.${editandoOrdenId}`, {
     method: 'PATCH',
     headers: { 'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'return=minimal' },
@@ -3085,6 +3098,7 @@ async function guardarEdicion(silencioso) {
       ciudad: datos.ciudad, direccion: datos.direccion,
       metodo_pago: datos.metodo_pago, vendedor: datos.vendedor,
       productos: productos, valor_total: totalNum, saldo_pendiente: nuevoSaldo,
+      ..._fechasPatch,
     })
   });
 
