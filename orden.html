@@ -1842,6 +1842,9 @@ async function enviarWhatsApp() {
     alert(`ℹ️ La orden ${numeroReservado} de ${datos.nombre||'cliente'} quedó guardada en el historial.\n\nEl mensaje de WhatsApp no se pudo enviar (verifica que WAHA/ngrok esté activo).\nPuedes reenviarlo desde el botón "Editar" en el historial.`);
   }
 
+  // PASO 7 — Subir sola a Secretaria (25-nov). Si falla, queda el botón del historial.
+  try { await subirASecretariaAuto(numeroReservado); } catch (eSec) { console.warn('Subida automática:', eSec); }
+
   if (btnEnviar) { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar ✓'; }
 }
 
@@ -2452,15 +2455,36 @@ ${estadoPago}
 
 function cerrarDetalle() { document.getElementById('detalleOverlay').classList.remove('show'); }
 
-async function subirASecretaria(ordenId, btn) {
+// Subida automática a Secretaria justo después de guardar y enviar la orden (25-nov, pedido de Chispi).
+// Si algo falla, la orden ya está guardada: queda el botón "Subir a Secretaria" en el historial.
+async function subirASecretariaAuto(numeroOrden) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/pedidos?numero_orden=eq.${encodeURIComponent(numeroOrden)}&select=*&order=created_at.desc&limit=1`, {
+      headers: { 'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY }
+    });
+    if (!res.ok) throw new Error('no se pudo leer la orden: ' + res.status);
+    const rows = await res.json();
+    const o = rows && rows[0];
+    if (!o || !o.id) throw new Error('orden no encontrada');
+    if (!todasLasOrdenes.some(x => x.id === o.id)) todasLasOrdenes.unshift(o);
+    await subirASecretaria(o.id, null, true);
+  } catch (e) {
+    console.warn('Subida automática a Secretaria falló (la orden sí quedó guardada):', e);
+    mostrarToast('⚠️ La orden no se subió sola a Secretaria — súbela con el botón del historial');
+  }
+}
+
+async function subirASecretaria(ordenId, btn, auto) {
+  // auto = true: subida automática al enviar la orden (25-nov). Sin preguntas; si ve un posible duplicado NO sube y avisa.
   const o = todasLasOrdenes.find(x => x.id === ordenId);
   if (!o) return;
-  if (o.registrado_secretaria) { mostrarToast('Esta orden ya está en Secretaria'); return; }
+  if (o.registrado_secretaria) { if (!auto) mostrarToast('Esta orden ya está en Secretaria'); return; }
 
   const numOrden   = String(o.numero_orden || o.op || '');
   const totalOrden = Number(o.valor_total) || 0;
 
   if (totalOrden <= 0) {
+    if (auto) { mostrarToast('ℹ️ La orden no se subió sola a Secretaria (sin valor total)'); return; }
     alert('⚠️ Esta orden no tiene un valor total válido. Corrígela antes de subirla a Secretaria.');
     return;
   }
@@ -2542,7 +2566,7 @@ async function subirASecretaria(ordenId, btn) {
     `Estado:    ${etiqEstado}\n\n` +
     `Soporte:   ${o.pdf_url ? 'se adjunta automáticamente ✓' : 'la orden no tiene PDF ✗'}\n\n` +
     `Revisa que todo esté correcto. Después tendrás que corregirlo desde Secretaria.`;
-  if (!confirm(resumen)) return;
+  if (!auto && !confirm(resumen)) return;
 
   // ── MODO PRUEBA: mostrar lo que se iba a guardar y NO escribir nada ──
   if (MODO_PRUEBA) {
@@ -2637,6 +2661,15 @@ async function subirASecretaria(ordenId, btn) {
           return comunes.length >= 2;
         });
 
+        if (sospechosos.length > 0 && auto) {
+          // Subida automática: ante la duda NO se sube; queda el botón para decidir a mano
+          alert(`ℹ️ La orden ${numOrden} quedó guardada y enviada, pero NO se subió sola a Secretaria:
+
+ya hay ${sospechosos.length} registro${sospechosos.length===1?'':'s'} con el mismo monto y un cliente parecido (posible duplicado).
+
+Revisa en Secretaria. Si no está, súbela con el botón "📤 Subir a Secretaria" en el historial.`);
+          return;
+        }
         if (sospechosos.length > 0) {
           const lista = sospechosos.slice(0,3).map(t =>
             `  \u2022 ${(t.descripcion||'sin concepto').slice(0,45)}\n` +
